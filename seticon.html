@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <title>앱 이름</title>
+</head>
+<body>
+모바일에서 설치하기
+<button id="install">앱 설치</button>
+
+<script>
+  const btn = document.getElementById('install');
+  let deferred;
+
+  // 크롬/엣지/삼성 인터넷: 설치 팝업 호출
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e;
+    btn.hidden = false;
+  });
+
+  btn.addEventListener('click', async () => {
+    if (deferred) {
+      deferred.prompt();
+      await deferred.userChoice;
+      deferred = null;
+      btn.hidden = true;
+    } else {
+      // iOS Safari: 팝업 API가 없어서 안내만
+      alert('공유 버튼(□↑) → "홈 화면에 추가"를 눌러주세요');
+    }
+  });
+
+  window.addEventListener('appinstalled', () => (btn.hidden = true));
+
+  // iOS는 이벤트가 없으니 버튼을 직접 보여줌 (이미 설치된 상태는 제외)
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isIOS && !installed) btn.hidden = false;
+</script>
+
+</body>
+</html>

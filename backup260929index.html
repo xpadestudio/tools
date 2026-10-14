@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>인물 이미지 성형기:Face Liquify - XPADE</title>
+	<meta name="description" content="AI로 생성한 인물 이미지 및 얼굴 사진 보정을 위한 심플한 무료 웹 서비스입니다. 얼굴 성형기, 인물 성형기, 이미지 편집/수정">
+<meta name="theme-color" content="#000000" />	
+<link rel="canonical" href="https://xpade.dothome.co.kr/">
+<meta property="og:image" content="https://xpade.dothome.co.kr/og_thumb.png"/>
+<meta property="og:url" content="https://xpade.dothome.co.kr/"/>
+<meta property="og:description" content="AI로 생성한 인물 이미지 및 얼굴 사진 보정을 위한 심플한 무료 웹 서비스입니다. 얼굴 성형기, 인물 성형기, 이미지 편집/수정"/>
+<meta property="og:title" content="인물 이미지 성형기:Face Liquify - XPADE"/>
+<meta property="og:type" content="website" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/human/3.3.6/human.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg: #141213;
+    --panel: #1d1a1b;
+    --panel-2: #242021;
+    --line: #34302f;
+    --amber: #c98a3e;
+    --amber-soft: #c98a3e33;
+    --text: #ece6e0;
+    --text-dim: #948b85;
+    --danger: #b6543f;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    display:flex;
+    min-height:100vh;
+  }
+
+  .app{ display:flex; width:100%; }
+
+  /* ---------- canvas stage ---------- */
+  .stage{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    position:relative;
+    background:
+      radial-gradient(circle at 30% 20%, #201c1b 0%, var(--bg) 55%);
+  }
+  .stage-header{
+    position:absolute; top:24px; left:32px;
+    font-family:'Space Grotesk',sans-serif;
+    letter-spacing:.04em;
+  }
+  .stage-header .kicker{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .stage-header h1{
+    margin:4px 0 0;
+    font-size:20px;
+    font-weight:500;
+    color:var(--text);
+  }
+
+  .canvas-wrap{
+    position:relative;
+    border:1px solid var(--line);
+    background:repeating-conic-gradient(#1a1717 0% 25%, #171415 0% 50%) 50% / 24px 24px;
+    box-shadow: 0 40px 80px -40px #000;
+    max-width:100%;
+  }
+  canvas{ display:block; max-width: min(64vw, 720px); height:auto; cursor:crosshair; }
+
+  .drop-hint{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px;
+    color:var(--text-dim);
+    font-size:13px;
+    pointer-events:none;
+  }
+  .drop-hint svg{ opacity:.6; }
+
+  .status{
+    margin-top:16px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    color:var(--text-dim);
+    letter-spacing:.03em;
+    display:flex; gap:18px; align-items:center;
+  }
+  .status .dot{ width:6px; height:6px; border-radius:50%; background:var(--text-dim); display:inline-block; margin-right:6px; }
+  .status .dot.ok{ background:#7fae6a; box-shadow:0 0 8px #7fae6a; }
+  .status .dot.busy{ background:var(--amber); box-shadow:0 0 8px var(--amber); animation:pulse 1s infinite; }
+  @keyframes pulse{ 50%{ opacity:.35; } }
+
+  /* ---------- side panel ---------- */
+  .panel{
+    width:340px;
+    background:var(--panel);
+    border-left:1px solid var(--line);
+    padding:26px 24px;
+    overflow-y:auto;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:500;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::before{ content:''; width:14px; height:1px; background:var(--amber); display:inline-block; }
+
+  .file-btn{
+    display:block; width:100%;
+    padding:12px 14px;
+    background:var(--panel-2);
+    border:1px dashed var(--line);
+    border-radius:2px;
+    color:var(--text);
+    font-size:13px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s;
+    margin-bottom:26px;
+  }
+  .file-btn:hover{ border-color:var(--amber); }
+  .file-btn input{ display:none; }
+
+  .group{ margin-bottom:22px; }
+  .group-title{
+    font-size:12px; color:var(--amber);
+    font-family:'JetBrains Mono',monospace;
+    letter-spacing:.05em;
+    margin-bottom:10px;
+    text-transform:uppercase;
+  }
+
+  .slider-row{ margin-bottom:14px; }
+  .slider-row label{
+    display:flex; justify-content:space-between;
+    font-size:12.5px; color:var(--text);
+    margin-bottom:6px;
+  }
+  .slider-row .val{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--text-dim);
+    font-size:11.5px;
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;
+    height:2px;
+    background:var(--line);
+    outline:none;
+    border-radius:1px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:12px; height:12px;
+    border-radius:50%;
+    background:var(--amber);
+    border:2px solid #14121340;
+    cursor:pointer;
+    margin-top:-5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--amber); border:none; cursor:pointer;
+  }
+
+  .toggles{ display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap; }
+  .toggle{
+    flex:1; min-width:0;
+    padding:9px 4px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-size:11px;
+    text-align:center;
+    cursor:pointer;
+    border-radius:2px;
+    user-select:none;
+  }
+  .toggle.active{ color:var(--amber); border-color:var(--amber-soft); background:#c98a3e14; }
+
+  .actions{ display:flex; gap:8px; margin-top:8px; }
+  .btn{
+    flex:1;
+    padding:11px 10px;
+    border-radius:2px;
+    font-size:12.5px;
+    text-align:center;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+  }
+  .btn.primary{ background:var(--amber); color:#1b1614; border-color:var(--amber); font-weight:600; }
+  .btn.ghost:hover{ border-color:var(--text-dim); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .tool-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .tool.active{ color:#1b1614; background:var(--amber); border-color:var(--amber); font-weight:600; }
+  .mini-actions{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0 18px; }
+  .disabled{ opacity:.4; pointer-events:none; }
+  .canvas-wrap.brush canvas{ cursor:none; touch-action:none; }
+
+  .note{
+    font-size:11px; color:var(--text-dim); line-height:1.6; margin-top:22px;
+    border-top:1px solid var(--line); padding-top:16px;
+  }
+  .note b{ color:var(--text); }
+  .copyright{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    line-height:1.7;
+    color:var(--text-dim);
+    letter-spacing:.02em;
+  }
+  .copyright a{ color:var(--amber); text-decoration:none; }
+  .copyright a:hover{ text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="stage">
+    <div class="stage-header">
+      <div class="kicker">얼굴 인식 · 메시 변형 · v1.0</div>
+      <h1>얼굴 리퀴파이</h1>
+    </div>
+
+    <div class="canvas-wrap brush" id="canvasWrap">
+      <canvas id="outCanvas" width="720" height="720"></canvas>
+      <div class="drop-hint" id="dropHint">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#948b85" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <div>이미지를 불러와 시작하세요</div>
+      </div>
+    </div>
+
+    <div class="status">
+      <span><span class="dot" id="modelDot"></span><span id="modelStatus">모델 대기 중</span></span>
+      <span><span class="dot" id="faceDot"></span><span id="faceStatus">얼굴 미검출</span></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>이미지</h2>
+    <label class="file-btn">
+      이미지 선택 (JPG/PNG)
+      <input type="file" id="fileInput" accept="image/*">
+    </label>
+
+    <h2>눈</h2>
+    <div class="group">
+      <div class="slider-row">
+        <label>눈 크기 <span class="val" id="v-eyeSize">0</span></label>
+        <input type="range" id="eyeSize" min="-40" max="40" value="0">
+      </div>
+      <div class="slider-row">
+        <label>눈 사이 거리 <span class="val" id="v-eyeDist">0</span></label>
+        <input type="range" id="eyeDist" min="-30" max="30" value="0">
+      </div>
+      <div class="slider-row">
+        <label>눈꼬리 각도 <span class="val" id="v-eyeTilt">0</span></label>
+        <input type="range" id="eyeTilt" min="-40" max="40" value="0">
+      </div>
+    </div>
+
+    <h2>코 / 입</h2>
+    <div class="group">
+      <div class="slider-row">
+        <label>코 폭 <span class="val" id="v-noseWidth">0</span></label>
+        <input type="range" id="noseWidth" min="-40" max="40" value="0">
+      </div>
+      <div class="slider-row">
+        <label>입 크기 <span class="val" id="v-mouthWidth">0</span></label>
+        <input type="range" id="mouthWidth" min="-25" max="25" value="0">
+      </div>
+      <div class="slider-row">
+        <label>입꼬리 <span class="val" id="v-smile">0</span></label>
+        <input type="range" id="smile" min="-20" max="20" value="0">
+      </div>
+    </div>
+
+    <h2>얼굴형</h2>
+    <div class="group">
+      <div class="slider-row">
+        <label>턱선 <span class="val" id="v-jawline">0</span></label>
+        <input type="range" id="jawline" min="-25" max="25" value="0">
+      </div>
+      <div class="slider-row">
+        <label>얼굴 폭 <span class="val" id="v-faceWidth">0</span></label>
+        <input type="range" id="faceWidth" min="-25" max="25" value="0">
+      </div>
+      <div class="slider-row">
+        <label>턱 높이 <span class="val" id="v-chin">0</span></label>
+        <input type="range" id="chin" min="-40" max="40" value="0">
+      </div>
+    </div>
+
+    <h2>직접 변형</h2>
+    <div class="tool-row">
+      <div class="toggle tool active" id="toolWarp">밀기</div>
+      <div class="toggle tool" id="toolSmooth">완화</div>
+    </div>
+    <div class="group">
+      <div class="slider-row">
+        <label>브러시 크기 <span class="val" id="v-brushSize">90</span></label>
+        <input type="range" id="brushSize" min="30" max="240" value="90">
+      </div>
+      <div class="slider-row">
+        <label>브러시 강도 <span class="val" id="v-brushStrength">45</span></label>
+        <input type="range" id="brushStrength" min="5" max="100" value="45">
+      </div>
+    </div>
+    <div class="mini-actions">
+      <div class="btn ghost" id="undoBtn">실행 취소</div>
+      <div class="btn ghost" id="redoBtn">다시 실행</div>
+    </div>
+
+    <div class="toggles">
+      <div class="toggle" id="toggleMesh">메시</div>
+      <div class="toggle" id="toggleLandmarks">제어점</div>
+      <div class="toggle active" id="toggleOriginal">누르기: 원본</div>
+    </div>
+
+    <div class="actions">
+      <div class="btn ghost" id="resetBtn">전체 초기화</div>
+      <div class="btn primary" id="downloadBtn">저장</div>
+    </div>
+
+    <div class="note">
+      <b>사용법.</b> 슬라이더를 더블클릭하면 해당 값이 초기화됩니다. 이미지 위를 드래그해 직접 밀어내며, 완화 도구는 수동 변형을 약화합니다. 누르기: 원본 버튼을 누르고 있는 동안 원본을 확인할 수 있습니다.
+    </div>
+    <div class="copyright">
+      © 2026 Xpade Studio. All rights reserved.<br>
+      Created by <a href="https://www.threads.com/@xpade_kr" target="_blank" rel="noopener noreferrer">Xpade</a> · Face Liquify v1.0
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('outCanvas');
+  const ctx = canvas.getContext('2d');
+  const fileInput = document.getElementById('fileInput');
+  const dropHint = document.getElementById('dropHint');
+  const modelDot = document.getElementById('modelDot');
+  const modelStatus = document.getElementById('modelStatus');
+  const faceDot = document.getElementById('faceDot');
+  const faceStatus = document.getElementById('faceStatus');
+
+  let img = null;
+  let landmarks = null; // array of {x,y} in image pixel coords
+  let modelsReady = false;
+  let showMesh = false, showPoints = false;
+  let showOriginal = false, brushTool = 'warp';
+  let brushSize = 90, brushStrength = 45;
+  let manualControls = [];
+  let history = [], historyIndex = -1;
+  let pointer = {inside:false, down:false, x:0, y:0, lastX:0, lastY:0};
+  let renderQueued = false;
+
+  const GRID_COLS = 48, GRID_ROWS = 48; // 강한 변형에서도 폴리곤 형태가 드러나지 않도록 세분화
+
+  const sliders = ['eyeSize','eyeDist','eyeTilt','noseWidth','mouthWidth','smile','jawline','faceWidth','chin'];
+  const state = {};
+  sliders.forEach(id=>{
+    const el = document.getElementById(id);
+    const label = document.getElementById('v-'+id);
+    state[id] = 0;
+    el.addEventListener('input', ()=>{
+      state[id] = parseFloat(el.value);
+      label.textContent = el.value;
+      queueRender();
+    });
+    el.addEventListener('change', commitHistory);
+  });
+
+  function snapshot(){ return {state:{...state}, manual:manualControls.map(p=>({...p}))}; }
+  function commitHistory(){
+    history=history.slice(0,historyIndex+1); history.push(snapshot()); historyIndex=history.length-1;
+    if(history.length>40){ history.shift(); historyIndex--; }
+    updateHistoryButtons();
+  }
+  function restoreSnapshot(snap){
+    Object.assign(state,snap.state); manualControls=snap.manual.map(p=>({...p}));
+    sliders.forEach(id=>{document.getElementById(id).value=state[id];document.getElementById('v-'+id).textContent=state[id];});
+    updateHistoryButtons(); queueRender();
+  }
+  function updateHistoryButtons(){
+    document.getElementById('undoBtn').classList.toggle('disabled',historyIndex<=0);
+    document.getElementById('redoBtn').classList.toggle('disabled',historyIndex>=history.length-1);
+  }
+  function queueRender(){ if(renderQueued)return; renderQueued=true; requestAnimationFrame(()=>{renderQueued=false;render();}); }
+
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    sliders.forEach(id=>{
+      document.getElementById(id).value = 0;
+      state[id] = 0;
+      document.getElementById('v-'+id).textContent = '0';
+    });
+    manualControls=[]; commitHistory(); queueRender();
+  });
+
+  document.getElementById('undoBtn').addEventListener('click',()=>{if(historyIndex>0)restoreSnapshot(history[--historyIndex]);});
+  document.getElementById('redoBtn').addEventListener('click',()=>{if(historyIndex<history.length-1)restoreSnapshot(history[++historyIndex]);});
+  const brushSizeEl=document.getElementById('brushSize'), brushStrengthEl=document.getElementById('brushStrength');
+  brushSizeEl.addEventListener('input',()=>{brushSize=+brushSizeEl.value;document.getElementById('v-brushSize').textContent=brushSize;queueRender();});
+  brushStrengthEl.addEventListener('input',()=>{brushStrength=+brushStrengthEl.value;document.getElementById('v-brushStrength').textContent=brushStrength;});
+  // 모든 슬라이더는 더블클릭하면 HTML에 정의된 기본값으로 복귀한다.
+  document.querySelectorAll('input[type="range"]').forEach(el=>el.addEventListener('dblclick',e=>{
+    e.preventDefault(); el.value=el.defaultValue; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+  }));
+  function setTool(tool){brushTool=tool;document.getElementById('toolWarp').classList.toggle('active',tool==='warp');document.getElementById('toolSmooth').classList.toggle('active',tool==='smooth');}
+  document.getElementById('toolWarp').addEventListener('click',()=>setTool('warp'));
+  document.getElementById('toolSmooth').addEventListener('click',()=>setTool('smooth'));
+
+  document.getElementById('toggleMesh').addEventListener('click', function(){
+    showMesh = !showMesh; this.classList.toggle('active', showMesh); queueRender();
+  });
+  document.getElementById('toggleLandmarks').addEventListener('click', function(){
+    showPoints = !showPoints; this.classList.toggle('active', showPoints); queueRender();
+  });
+
+  const beforeBtn=document.getElementById('toggleOriginal');
+  beforeBtn.addEventListener('pointerdown',e=>{e.preventDefault();showOriginal=true;queueRender();});
+  const releaseBefore=()=>{if(showOriginal){showOriginal=false;queueRender();}};
+  window.addEventListener('pointerup',releaseBefore); beforeBtn.addEventListener('pointerleave',releaseBefore);
+
+  function canvasPoint(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height};}
+  canvas.addEventListener('pointerenter',e=>{pointer.inside=true;Object.assign(pointer,canvasPoint(e));queueRender();});
+  canvas.addEventListener('pointerleave',()=>{pointer.inside=false;if(!pointer.down)queueRender();});
+  canvas.addEventListener('pointerdown',e=>{if(!img)return;canvas.setPointerCapture(e.pointerId);const p=canvasPoint(e);Object.assign(pointer,{down:true,inside:true,x:p.x,y:p.y,lastX:p.x,lastY:p.y});});
+  canvas.addEventListener('pointermove',e=>{
+    if(!img)return;const p=canvasPoint(e);pointer.x=p.x;pointer.y=p.y;
+    if(pointer.down){
+      const s=img.width/canvas.width;
+      if(brushTool==='warp'){
+        const dx=p.x-pointer.lastX,dy=p.y-pointer.lastY;
+        if(dx*dx+dy*dy>.3){const gain=brushStrength/100;manualControls.push({x:pointer.lastX*s,y:pointer.lastY*s,dx:dx*s*gain,dy:dy*s*gain,r:brushSize*s*.5,group:'brush-'+manualControls.length,unmasked:true});pointer.lastX=p.x;pointer.lastY=p.y;}
+      }else{
+        const rr=brushSize*s*.5,cx=p.x*s,cy=p.y*s;
+        manualControls=manualControls.filter(c=>{const d=Math.hypot(c.x-cx,c.y-cy);if(d<rr){const keep=Math.max(.1,d/rr);c.dx*=keep;c.dy*=keep;return Math.hypot(c.dx,c.dy)>.08;}return true;});
+      }
+    }
+    queueRender();
+  });
+  canvas.addEventListener('pointerup',e=>{if(!pointer.down)return;pointer.down=false;try{canvas.releasePointerCapture(e.pointerId);}catch(_){}commitHistory();queueRender();});
+
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    if(!img){ return; }
+    try{
+      const exportCanvas = landmarks ? renderFullResExportCanvas() : (()=>{
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
+        return c;
+      })();
+      const dataUrl = exportCanvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.download = 'liquify-result.png';
+      a.href = dataUrl;
+      document.body.appendChild(a); // 일부 샌드박스는 DOM에 붙은 앵커만 클릭을 허용함
+      a.click();
+      document.body.removeChild(a);
+    }catch(e){
+      console.error('download failed', e);
+      faceStatus.textContent = '다운로드 실패: ' + e.message;
+    }
+  });
+
+  // ---------- model loading ----------
+  let human = null;
+  async function loadModels(){
+    try{
+      const HumanCtor = (window.Human && window.Human.default) ? window.Human.default : window.Human;
+      human = new HumanCtor({
+        modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
+        backend: 'webgl',
+        face: {
+          enabled: true,
+          detector: { maxDetected: 1 },
+          mesh: { enabled: true },
+          iris: { enabled: false },
+          description: { enabled: false },
+          emotion: { enabled: false },
+          antispoof: { enabled: false },
+          liveness: { enabled: false }
+        },
+        body: { enabled: false },
+        hand: { enabled: false },
+        object: { enabled: false },
+        gesture: { enabled: false },
+        segmentation: { enabled: false }
+      });
+      await human.load();
+      modelsReady = true;
+      modelDot.classList.add('ok');
+      modelStatus.textContent = '모델 준비 완료';
+      console.log('human.load() 완료');
+    }catch(e){
+      modelStatus.textContent = '모델 로드 실패: ' + e.message;
+      console.error('loadModels 오류', e);
+    }
+  }
+  loadModels();
+
+  // ---------- image loading ----------
+  fileInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const image = new Image();
+      image.onload = async ()=>{
+        img = image; landmarks=null; manualControls=[]; history=[]; historyIndex=-1;
+        dropHint.style.display = 'none';
+        fitCanvas();
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height); // 감지 전에도 원본을 즉시 표시
+        await detectFace();
+        commitHistory(); render();
+      };
+      image.onerror = (err)=>{ console.error('image load failed', err); faceStatus.textContent = '이미지 로드 실패'; };
+      image.src = reader.result; // data: URI — blob: 보다 호환성이 좋음
+    };
+    reader.onerror = (err)=>{ console.error('file read failed', err); };
+    reader.readAsDataURL(file);
+  });
+
+  function fitCanvas(){
+    const max = 720;
+    const scale = Math.min(max/img.width, max/img.height, 1);
+    canvas.width = Math.round(img.width*scale);
+    canvas.height = Math.round(img.height*scale);
+  }
+
+  function withTimeout(promise, ms){
+    return Promise.race([
+      promise,
+      new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), ms))
+    ]);
+  }
+
+  async function detectFace(){
+    faceDot.classList.remove('ok'); faceDot.classList.add('busy');
+    faceStatus.textContent = '얼굴 분석 중…';
+    if(!modelsReady){
+      let tries = 0;
+      while(!modelsReady && tries < 75){ await new Promise(r=>setTimeout(r,200)); tries++; }
+      if(!modelsReady){
+        faceDot.classList.remove('busy');
+        faceStatus.textContent = '모델 로드 지연 — 새로고침 후 재시도';
+        return;
+      }
+    }
+    try{
+      console.log('detect() 시작', img.width, img.height);
+      const result = await withTimeout(human.detect(img), 20000);
+      console.log('detect() 결과', result);
+      if(result.face && result.face.length){
+        const face = result.face[0];
+        // face.mesh: 468 points as [x, y, z] — 원본 이미지 픽셀 좌표 그대로 저장 (스케일링은 렌더 시점에)
+        landmarks = face.mesh.map(p=>({x:p[0], y:p[1]}));
+        faceDot.classList.remove('busy'); faceDot.classList.add('ok');
+        faceStatus.textContent = '얼굴 1개 감지됨 (468 pts)';
+      } else {
+        faceDot.classList.remove('busy');
+        faceStatus.textContent = '얼굴을 찾지 못함 — 정면 사진 권장';
+        landmarks = null;
+      }
+    }catch(e){
+      faceDot.classList.remove('busy');
+      faceStatus.textContent = '검출 오류: ' + e.message;
+      console.error('detectFace 오류', e);
+    }
+  }
+
+
+  // MediaPipe canonical 468-point face mesh indices
+  const IDX = {
+    jaw: [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
+    leftEye: [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246],
+    rightEye: [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398],
+    nose: [1,2,98,327,168,197,5,4,45,275],
+    mouthOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
+    chin: [148,152,377]
+  };
+  const LOWER_JAW = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454];
+  const FACE_SIDES = [127,162,21,54,103,67,109,234,93,132,58,172,136,150,149,176,148,377,400,378,379,365,397,288,361,323,454,356,389,251,284,332,297,338];
+
+  function centroid(lm, idxs){
+    let x=0,y=0;
+    idxs.forEach(i=>{ x+=lm[i].x; y+=lm[i].y; });
+    return {x:x/idxs.length, y:y/idxs.length};
+  }
+
+  function boundsOf(lm, idxs, padX=1, padY=1){
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    idxs.forEach(i=>{const p=lm[i];minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
+    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    return {type:'ellipse',cx,cy,rx:Math.max(2,(maxX-minX)/2*padX),ry:Math.max(2,(maxY-minY)/2*padY)};
+  }
+  function compactMask(x,y,m){
+    if(!m)return 1;
+    const nx=(x-m.cx)/m.rx,ny=(y-m.cy)/m.ry,r=Math.sqrt(nx*nx+ny*ny);
+    if(r>=1)return 0;if(r<=.62)return 1;
+    const t=(r-.62)/.38,s=t*t*(3-2*t);
+    return 1-s;
+  }
+
+  // Build a sparse set of control points + their displacement vectors based on slider state
+  // lm: landmark array already scaled to the target render size (display canvas or full-res export canvas)
+  // scale: targetWidth / 720 — used to scale the fixed-pixel-amount sliders (eyeDist, smile, chin) so they look the same regardless of output resolution
+  function buildControlPoints(lm, scale){
+    const pts = []; // {x,y,dx,dy}
+    if(!lm) return pts;
+
+    const faceC = centroid(lm, IDX.jaw);
+
+    // Eye size: push eye-ring points outward/inward from each eye's centroid
+    [IDX.leftEye, IDX.rightEye].forEach((idxs,eyeNo)=>{
+      const c = centroid(lm, idxs);
+      const amt = state.eyeSize/40 * 0.35; // fraction
+      const mask=boundsOf(lm,idxs,1.75,2.15);
+      idxs.forEach(i=>{
+        const p = lm[i];
+        pts.push({x:p.x,y:p.y,dx:(p.x-c.x)*amt,dy:(p.y-c.y)*amt,r:mask.rx*.72,group:'eyeSize'+eyeNo,mask});
+      });
+    });
+
+    // Eye distance: move each eye centroid toward/away from face center horizontally
+    const leftC = centroid(lm, IDX.leftEye), rightC = centroid(lm, IDX.rightEye);
+    const distAmt = state.eyeDist/30 * 6 * scale;
+    const dir = rightC.x > leftC.x ? 1 : -1;
+    const leftMask=boundsOf(lm,IDX.leftEye,2.0,2.25),rightMask=boundsOf(lm,IDX.rightEye,2.0,2.25);
+    IDX.leftEye.forEach(i=>pts.push({x:lm[i].x,y:lm[i].y,dx:-dir*distAmt,dy:0,r:leftMask.rx*.68,group:'eyeDistL',mask:leftMask}));
+    IDX.rightEye.forEach(i=>pts.push({x:lm[i].x,y:lm[i].y,dx:dir*distAmt,dy:0,r:rightMask.rx*.68,group:'eyeDistR',mask:rightMask}));
+
+    // Eye tilt: 얼굴 중심 기준으로 좌우 눈을 반대 방향 회전해 눈꼬리 각도를 대칭 조절
+    [IDX.leftEye,IDX.rightEye].forEach((idxs,eyeNo)=>{
+      const c=centroid(lm,idxs),mask=boundsOf(lm,idxs,1.8,2.25);
+      const angle=state.eyeTilt/40*(Math.PI/15)*(eyeNo===0?1:-1);
+      const cos=Math.cos(angle),sin=Math.sin(angle);
+      idxs.forEach(i=>{const p=lm[i],px=p.x-c.x,py=p.y-c.y,rx=px*cos-py*sin,ry=px*sin+py*cos;
+        pts.push({x:p.x,y:p.y,dx:rx-px,dy:ry-py,r:mask.rx*.62,group:'eyeTilt'+eyeNo,mask});
+      });
+    });
+
+    // Nose width: 콧대 상부는 약하게, 코끝과 콧방울은 조금 더 크게 좌우 이동
+    {
+      const leftNose=[193,122,196,3,51,45,220,115,48,64,98];
+      const rightNose=[417,351,419,248,281,275,440,344,278,294,327];
+      const allNose=[168,6,197,195,5,4,1,2,...leftNose,...rightNose];
+      const mask=boundsOf(lm,allNose,1.22,1.18),bridgeY=lm[168].y,bottomY=Math.max(lm[98].y,lm[327].y);
+      const half=Math.abs(lm[327].x-lm[98].x)/2;
+      const delta=state.noseWidth/40*half*.28;
+      [[leftNose,-1,'L'],[rightNose,1,'R']].forEach(([idxs,side,name])=>idxs.forEach(i=>{
+        const p=lm[i],t=Math.max(0,Math.min(1,(p.y-bridgeY)/(bottomY-bridgeY||1))),weight=.28+.72*t;
+        pts.push({x:p.x,y:p.y,dx:side*delta*weight,dy:0,r:mask.rx*.42,group:'noseWidth'+name,mask});
+      }));
+    }
+
+    // Mouth width: 좌우 입술을 각각 한 그룹으로 묶어 누적 폭주 없이 입꼬리까지 함께 이동
+    {
+      const c = centroid(lm, IDX.mouthOuter);
+      const mask=boundsOf(lm,IDX.mouthOuter,1.35,1.85),half=Math.abs(lm[291].x-lm[61].x)/2;
+      const delta=state.mouthWidth/25*half*.16;
+      const leftLip=[61,185,40,39,146,91,181,84],rightLip=[291,409,270,269,375,321,405,314];
+      [[leftLip,-1,'L'],[rightLip,1,'R']].forEach(([idxs,side,name])=>idxs.forEach(i=>{
+        const p=lm[i],distanceWeight=.58+.42*Math.min(1,Math.abs(p.x-c.x)/(half||1));
+        pts.push({x:p.x,y:p.y,dx:side*delta*distanceWeight,dy:0,r:mask.rx*.34,group:'mouthWidth'+name,mask});
+      }));
+    }
+
+    // Mouth corner: 입 중앙과 인중은 고정하고 좌우 구각 주변만 국소적으로 상하 이동한다.
+    {
+      const amt=state.smile/20*5*scale;
+      const mouthBox=boundsOf(lm,IDX.mouthOuter,1,1),half=Math.abs(lm[291].x-lm[61].x)/2;
+      const lipHeight=Math.max(4,mouthBox.ry*2);
+      const left=new Map([[61,1],[185,.52],[146,.42],[91,.22]]);
+      const right=new Map([[291,1],[409,.52],[375,.42],[321,.22]]);
+      [[left,61,'L'],[right,291,'R']].forEach(([points,cornerIndex,name])=>{
+        const corner=lm[cornerIndex];
+        const localMask={type:'ellipse',cx:corner.x,cy:corner.y,rx:half*.58,ry:lipHeight*1.65};
+        points.forEach((w,i)=>{const p=lm[i];
+          pts.push({x:p.x,y:p.y,dx:0,dy:-amt*w,r:localMask.rx*.52,group:'mouthCorner'+name,mask:localMask});
+        });
+      });
+    }
+
+    // Jawline: pull jaw points toward face centroid (slimming) or push out
+    {
+      const amt = state.jawline/25 * 0.12;
+      const mask=boundsOf(lm,LOWER_JAW,1.12,1.22);
+      LOWER_JAW.forEach(i=>{
+        const p = lm[i];
+        pts.push({x:p.x,y:p.y,dx:(faceC.x-p.x)*amt,dy:0,r:mask.rx*.13,group:'jawline',mask});
+      });
+    }
+
+    // Face width: 관자놀이부터 턱 옆선까지 전체 측면 윤곽을 연속적으로 이동
+    {
+      const amt = state.faceWidth/25 * 0.11;
+      const mask=boundsOf(lm,IDX.jaw,1.08,1.08);
+      FACE_SIDES.forEach(i=>{
+        const p = lm[i];
+        pts.push({x:p.x,y:p.y,dx:(p.x-faceC.x)*amt,dy:0,r:mask.rx*.14,group:'faceWidth',mask});
+      });
+    }
+
+    // Chin height: 턱끝을 중심으로 하관 연결선이 점진적으로 따라오게 이동
+    {
+      const amt = state.chin/40 * 8 * scale;
+      const mask=boundsOf(lm,LOWER_JAW,1.02,1.18),chinC=lm[152];
+      LOWER_JAW.forEach(i=>{
+        const p=lm[i],nx=Math.min(1,Math.abs(p.x-chinC.x)/(mask.rx*.92));
+        const weight=.18+.82*Math.pow(1-nx,1.45);
+        pts.push({x:p.x,y:p.y,dx:0,dy:amt*weight,r:mask.rx*.16,group:'chin',mask});
+      });
+    }
+
+    const manualScale=scale*REF_WIDTH/img.width;
+    manualControls.forEach(c=>pts.push({x:c.x*manualScale,y:c.y*manualScale,dx:c.dx*manualScale,dy:c.dy*manualScale,r:c.r*manualScale,group:c.group,unmasked:true}));
+    return pts;
+  }
+
+  // 순수 가중평균 RBF 변위 (정규화 버그 수정판) — wsum이 작아도 항상 진짜 가중평균만 반환
+  function rbfDisplacement(x, y, controls, sigma){
+    if(controls.length === 0) return {dx:0, dy:0};
+    const groups=new Map();
+    for(const c of controls){
+      const ddx = x-c.x, ddy = y-c.y;
+      const d2 = ddx*ddx + ddy*ddy;
+      const ss=c.r||sigma,w=Math.exp(-d2/(2*ss*ss));
+      if(w<.001)continue;
+      const g=groups.get(c.group)||{w:0,dx:0,dy:0,max:0,unmasked:false,mask:c.mask};
+      g.w+=w;g.dx+=w*c.dx;g.dy+=w*c.dy;g.max=Math.max(g.max,w);g.unmasked||=!!c.unmasked;groups.set(c.group,g);
+    }
+    let dx=0,dy=0,manualDx=0,manualDy=0;
+    groups.forEach(g=>{if(g.w<1e-6)return;const radial=g.max*g.max*(3-2*g.max),f=radial*compactMask(x,y,g.mask);if(g.unmasked){manualDx+=(g.dx/g.w)*f;manualDy+=(g.dy/g.w)*f;}else{dx+=(g.dx/g.w)*f;dy+=(g.dy/g.w)*f;}});
+    return {dx,dy,manualDx,manualDy};
+  }
+
+  // 얼굴 타원 바깥은 완전히 0으로 차단, 경계는 부드럽게 페더링
+  function computeFaceGeom(lm){
+    let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    IDX.jaw.forEach(i=>{
+      const p = lm[i];
+      minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+      minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y);
+    });
+    return { cx:(minX+maxX)/2, cy:(minY+maxY)/2, rx:(maxX-minX)/2 || 1, ry:(maxY-minY)/2 || 1 };
+  }
+  function faceMask(x, y, geom){
+    const dx = (x-geom.cx)/geom.rx, dy = (y-geom.cy)/geom.ry;
+    const r = Math.sqrt(dx*dx + dy*dy);
+    const inner = 0.92, outer = 1.28; // inner 안쪽은 100% 효과, outer 밖은 0%
+    if(r <= inner) return 1;
+    if(r >= outer) return 0;
+    const t = (r-inner)/(outer-inner);
+    return 1 - t*t*(3-2*t); // smoothstep
+  }
+
+  // Draw one warped source-triangle -> destination-triangle using canvas affine transform
+  function drawTriangle(targetCtx, srcImg, srcW, srcH, s0,s1,s2, d0,d1,d2){
+    // 소스와 목적 삼각형을 함께 0.65px 확장한다. 목적지만 겹치면 강한 변형에서 격자 이음선이 생긴다.
+    const expandTri=(p0,p1,p2,pad)=>{
+      const cx=(p0.x+p1.x+p2.x)/3,cy=(p0.y+p1.y+p2.y)/3;
+      const ex=p=>{const vx=p.x-cx,vy=p.y-cy,len=Math.hypot(vx,vy)||1,k=(len+pad)/len;return{x:cx+vx*k,y:cy+vy*k};};
+      return [ex(p0),ex(p1),ex(p2)];
+    };
+    const [es0,es1,es2]=expandTri(s0,s1,s2,.65);
+    const [ed0,ed1,ed2]=expandTri(d0,d1,d2,.65);
+
+    targetCtx.save();
+    targetCtx.beginPath();
+    targetCtx.moveTo(ed0.x,ed0.y);
+    targetCtx.lineTo(ed1.x,ed1.y);
+    targetCtx.lineTo(ed2.x,ed2.y);
+    targetCtx.closePath();
+    targetCtx.clip();
+
+    // solve affine matrix mapping src triangle -> dst triangle
+    const denom = (es1.x-es0.x)*(es2.y-es0.y) - (es2.x-es0.x)*(es1.y-es0.y);
+    if(Math.abs(denom) < 1e-8){ targetCtx.restore(); return; }
+
+    const a=((ed1.x-ed0.x)*(es2.y-es0.y)-(ed2.x-ed0.x)*(es1.y-es0.y))/denom;
+    const b=((ed1.y-ed0.y)*(es2.y-es0.y)-(ed2.y-ed0.y)*(es1.y-es0.y))/denom;
+    const c=((ed2.x-ed0.x)*(es1.x-es0.x)-(ed1.x-ed0.x)*(es2.x-es0.x))/denom;
+    const d=((ed2.y-ed0.y)*(es1.x-es0.x)-(ed1.y-ed0.y)*(es2.x-es0.x))/denom;
+    const e=ed0.x-a*es0.x-c*es0.y;
+    const f=ed0.y-b*es0.x-d*es0.y;
+
+    targetCtx.transform(a,b,c,d,e,f);
+    targetCtx.drawImage(srcImg, 0, 0, srcW, srcH);
+    targetCtx.restore();
+  }
+
+  const REF_WIDTH = 720; // 슬라이더 상수(6px, 8px, 10px 등)들의 기준 해상도
+
+  // 핵심 워프 렌더링 — targetCtx/targetCanvas에 그림. overlay=true면 화면 표시용(메시/포인트 오버레이 포함),
+  // overlay=false면 저장용(오버레이 없이 순수 이미지만, 어떤 해상도든 재사용 가능)
+  function renderTo(targetCtx, targetCanvas, overlay, gridN){
+    targetCtx.clearRect(0,0,targetCanvas.width,targetCanvas.height);
+
+    if(!landmarks){
+      targetCtx.drawImage(img, 0,0, targetCanvas.width, targetCanvas.height);
+      return;
+    }
+
+    const scale = targetCanvas.width / REF_WIDTH;
+    const lmScale = targetCanvas.width / img.width; // 원본 이미지 좌표 -> 이 타겟 캔버스 좌표
+    const lm = landmarks.map(p=>({x:p.x*lmScale, y:p.y*lmScale}));
+
+    const controls = buildControlPoints(lm, scale);
+    const sigma = targetCanvas.width * 0.085;
+    const geom = computeFaceGeom(lm);
+    // 클립 경계의 서브픽셀 안티앨리어싱 틈에는 원본 픽셀이 보이도록 먼저 바탕을 채운다.
+    targetCtx.drawImage(img,0,0,targetCanvas.width,targetCanvas.height);
+
+    // build grid of source points spanning the canvas, then warp each to destination
+    const cols = gridN || GRID_COLS, rows = gridN || GRID_ROWS;
+    const srcGrid = [], dstGrid = [];
+    for(let r=0; r<=rows; r++){
+      const sRow=[], dRow=[];
+      for(let cIdx=0; cIdx<=cols; cIdx++){
+        const x = cIdx/cols * targetCanvas.width;
+        const y = r/rows * targetCanvas.height;
+        sRow.push({x,y});
+        const raw = rbfDisplacement(x,y,controls,sigma);
+        const m = faceMask(x,y,geom);
+        dRow.push({x:x+raw.dx*m+raw.manualDx,y:y+raw.dy*m+raw.manualDy});
+      }
+      srcGrid.push(sRow); dstGrid.push(dRow);
+    }
+
+    for(let r=0; r<rows; r++){
+      for(let cIdx=0; cIdx<cols; cIdx++){
+        const s00=srcGrid[r][cIdx], s10=srcGrid[r][cIdx+1], s01=srcGrid[r+1][cIdx], s11=srcGrid[r+1][cIdx+1];
+        const d00=dstGrid[r][cIdx], d10=dstGrid[r][cIdx+1], d01=dstGrid[r+1][cIdx], d11=dstGrid[r+1][cIdx+1];
+        drawTriangle(targetCtx, img, targetCanvas.width, targetCanvas.height, s00,s10,s01, d00,d10,d01);
+        drawTriangle(targetCtx, img, targetCanvas.width, targetCanvas.height, s10,s11,s01, d10,d11,d01);
+      }
+    }
+
+    if(!overlay) return; // 저장용 렌더는 여기서 끝 — 메시/포인트를 절대 굽지 않음
+
+    if(showMesh){
+      targetCtx.strokeStyle = 'rgba(201,138,62,0.35)';
+      targetCtx.lineWidth = 1;
+      for(let r=0;r<=rows;r++){
+        targetCtx.beginPath();
+        for(let cIdx=0;cIdx<=cols;cIdx++){
+          const p = dstGrid[r][cIdx];
+          cIdx===0 ? targetCtx.moveTo(p.x,p.y) : targetCtx.lineTo(p.x,p.y);
+        }
+        targetCtx.stroke();
+      }
+      for(let cIdx=0;cIdx<=cols;cIdx++){
+        targetCtx.beginPath();
+        for(let r=0;r<=rows;r++){
+          const p = dstGrid[r][cIdx];
+          r===0 ? targetCtx.moveTo(p.x,p.y) : targetCtx.lineTo(p.x,p.y);
+        }
+        targetCtx.stroke();
+      }
+    }
+
+    if(showPoints){
+      targetCtx.fillStyle = '#c98a3e';
+      controls.forEach(c=>{
+        const raw = rbfDisplacement(c.x, c.y, controls, sigma);
+        const m = faceMask(c.x, c.y, geom);
+        targetCtx.beginPath(); targetCtx.arc(c.x+raw.dx*m+raw.manualDx,c.y+raw.dy*m+raw.manualDy,2.2,0,Math.PI*2); targetCtx.fill();
+      });
+    }
+    if(pointer.inside&&img){targetCtx.save();targetCtx.strokeStyle='rgba(236,230,224,.9)';targetCtx.lineWidth=1.2;targetCtx.beginPath();targetCtx.arc(pointer.x,pointer.y,brushSize/2,0,Math.PI*2);targetCtx.stroke();targetCtx.fillStyle='rgba(236,230,224,.9)';targetCtx.beginPath();targetCtx.arc(pointer.x,pointer.y,2,0,Math.PI*2);targetCtx.fill();targetCtx.restore();}
+  }
+
+  function render(){
+    if(!img) return;
+    if(showOriginal){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);return;}
+    renderTo(ctx, canvas, true);
+  }
+
+  // 원본 해상도로 다시 렌더링해서 내보내기 (오버레이 없이)
+  function renderFullResExportCanvas(){
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = img.width;
+    exportCanvas.height = img.height;
+    const exportCtx = exportCanvas.getContext('2d');
+    renderTo(exportCtx, exportCanvas, false, 96); // 고해상도 저장용 고밀도 메시
+    return exportCanvas;
+  }
+
+})();
+</script>
+</body>
+</html>

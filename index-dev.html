@@ -1,0 +1,2013 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>얼굴 리퀴파이 | 브라우저 얼굴 보정 도구 - Xpade Studio</title>
+<meta name="description" content="브라우저에서 얼굴 사진을 로컬로 분석해 눈, 홍채, 코, 입술, 중안부, 턱선과 얼굴 폭을 세밀하게 조정할 수 있는 얼굴 리퀴파이 도구입니다.">
+<meta property="og:title" content="얼굴 리퀴파이 | Xpade Studio">
+<meta property="og:description" content="눈·홍채·코·입술·중안부·턱선 등 얼굴 비율을 브라우저에서 세밀하게 조정하는 로컬 얼굴 리퀴파이 도구.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#D4FB08">
+<meta name="application-name" content="Face Liquify">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Face Liquify">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/human/3.3.6/human.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg: #141213;
+    --panel: #1d1a1b;
+    --panel-2: #242021;
+    --line: #34302f;
+    --amber: #c98a3e;
+    --amber-soft: #c98a3e33;
+    --text: #ece6e0;
+    --text-dim: #948b85;
+    --danger: #b6543f;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter','Noto Sans KR','Noto Sans SC','Noto Sans JP',system-ui,sans-serif;
+    display:flex;
+    min-height:100vh;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .app,.stage,.panel,.canvas-wrap,.stage-header,.status,.group,.slider-row,label,.btn,.toggle,h1,h2,.group-title,.debug-caption{
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  input[type=range], input[type=file], canvas{
+    -webkit-user-select:none;
+    user-select:none;
+  }
+
+  .app{ display:flex; width:100%; }
+
+  /* ---------- canvas stage ---------- */
+  .stage{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    position:relative;
+    background:
+      radial-gradient(circle at 30% 20%, #201c1b 0%, var(--bg) 55%);
+  }
+  .stage-header{
+    position:absolute; top:24px; left:32px;
+    font-family:'Space Grotesk',sans-serif;
+    letter-spacing:.04em;
+  }
+  .stage-header .kicker{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .stage-header h1{
+    margin:4px 0 0;
+    font-size:20px;
+    font-weight:500;
+    color:var(--text);
+  }
+
+  .canvas-wrap{
+    position:relative;
+    border:1px solid var(--line);
+    background:repeating-conic-gradient(#1a1717 0% 25%, #171415 0% 50%) 50% / 24px 24px;
+    box-shadow: 0 40px 80px -40px #000;
+    max-width:100%;
+  }
+  canvas{ display:block; max-width: min(64vw, 720px); height:auto; cursor:crosshair; }
+
+  .drop-hint{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px;
+    color:var(--text-dim);
+    font-size:13px;
+    pointer-events:none;
+  }
+  .drop-hint svg{ opacity:.6; }
+  .canvas-wrap.dragover{ border-color:var(--amber); box-shadow:0 0 0 2px var(--amber-soft), 0 40px 80px -40px #000; }
+  .canvas-wrap.dragover .drop-hint{ color:var(--text); }
+
+  .status{
+    margin-top:16px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;
+    color:var(--text-dim);
+    letter-spacing:.03em;
+    display:flex; gap:18px; align-items:center;
+  }
+  .status .dot{ width:6px; height:6px; border-radius:50%; background:var(--text-dim); display:inline-block; margin-right:6px; }
+  .status .dot.ok{ background:#7fae6a; box-shadow:0 0 8px #7fae6a; }
+  .status .dot.busy{ background:var(--amber); box-shadow:0 0 8px var(--amber); animation:pulse 1s infinite; }
+  @keyframes pulse{ 50%{ opacity:.35; } }
+
+  /* ---------- side panel ---------- */
+  .panel{
+    width:360px;
+    background:var(--panel);
+    border-left:1px solid var(--line);
+    padding:26px 24px;
+    overflow-y:auto;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:500;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel h2::before{ content:''; width:14px; height:1px; background:var(--amber); display:inline-block; }
+
+  .file-btn{
+    display:block; width:100%;
+    padding:12px 14px;
+    background:var(--panel-2);
+    border:1px dashed var(--line);
+    border-radius:2px;
+    color:var(--text);
+    font-size:13px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s;
+    margin-bottom:26px;
+  }
+  .file-btn:hover{ border-color:var(--amber); }
+  .file-btn input{ display:none; }
+
+  .group{ margin-bottom:22px; }
+  .group-title{
+    font-size:12px; color:var(--amber);
+    font-family:'JetBrains Mono',monospace;
+    letter-spacing:.05em;
+    margin-bottom:10px;
+    text-transform:uppercase;
+  }
+
+  .slider-row{ margin-bottom:12px; }
+  .slider-row label{
+    display:flex; justify-content:space-between; gap:10px; align-items:flex-end;
+    font-size:12.5px; color:var(--text);
+    margin-bottom:2px;
+  }
+  .slider-row .label-text{ min-width:0; }
+  .slider-row .val{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--text-dim);
+    font-size:11.5px;
+    flex:0 0 auto;
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    appearance:none;
+    width:100%;
+    height:28px;
+    background:transparent;
+    outline:none;
+    cursor:pointer;
+    touch-action:pan-y;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:4px;
+    background:var(--line);
+    border-radius:999px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:18px; height:18px;
+    border-radius:50%;
+    background:var(--amber);
+    border:2px solid #2b211b;
+    box-shadow:0 1px 4px #0008;
+    cursor:grab;
+    margin-top:-7px;
+  }
+  input[type=range]:active::-webkit-slider-thumb{ cursor:grabbing; transform:scale(1.06); }
+  input[type=range]::-moz-range-track{
+    height:4px;
+    background:var(--line);
+    border-radius:999px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px; height:18px;
+    border-radius:50%;
+    background:var(--amber);
+    border:2px solid #2b211b;
+    box-shadow:0 1px 4px #0008;
+    cursor:grab;
+  }
+  input[type=range]:focus-visible::-webkit-slider-thumb{ box-shadow:0 0 0 4px var(--amber-soft),0 1px 4px #0008; }
+  input[type=range]:focus-visible::-moz-range-thumb{ box-shadow:0 0 0 4px var(--amber-soft),0 1px 4px #0008; }
+  @media (pointer:coarse){
+    input[type=range]{ height:34px; }
+    input[type=range]::-webkit-slider-thumb{ width:22px; height:22px; margin-top:-9px; }
+    input[type=range]::-moz-range-thumb{ width:22px; height:22px; }
+  }
+
+  .panel-toolbar{
+    display:flex; align-items:center; justify-content:flex-end; gap:8px;
+    margin:-4px 0 20px;
+  }
+  .lang-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim);
+  }
+  .lang-select{
+    appearance:none; -webkit-appearance:none;
+    min-width:132px; height:34px;
+    padding:0 30px 0 10px;
+    border:1px solid var(--line); border-radius:2px;
+    background:var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23948b85' stroke-width='1.2'/%3E%3C/svg%3E") no-repeat right 10px center;
+    color:var(--text); font-size:11.5px; outline:none; cursor:pointer;
+  }
+  .lang-select:hover,.lang-select:focus{ border-color:var(--amber); }
+  .install-btn{
+    height:34px; padding:0 11px;
+    border:1px solid #D4FB0866; border-radius:2px;
+    background:#D4FB0814; color:#D4FB08;
+    font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.03em;
+    cursor:pointer; white-space:nowrap;
+  }
+  .install-btn:hover,.install-btn:focus{ border-color:#D4FB08; background:#D4FB0822; outline:none; }
+  .install-btn[hidden]{ display:none !important; }
+
+  .toggles{ display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap; }
+  .toggle{
+    flex:1; min-width:0;
+    padding:9px 4px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-size:11px;
+    text-align:center;
+    cursor:pointer;
+    border-radius:2px;
+    user-select:none;
+  }
+  .toggle.active{ color:var(--amber); border-color:var(--amber-soft); background:#c98a3e14; }
+
+  .actions{ display:flex; gap:8px; margin-top:8px; }
+  .btn{
+    flex:1;
+    padding:11px 10px;
+    border-radius:2px;
+    font-size:12.5px;
+    text-align:center;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+  }
+  .btn.primary{ background:var(--amber); color:#1b1614; border-color:var(--amber); font-weight:600; }
+  .btn.ghost:hover{ border-color:var(--text-dim); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .tool-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .tool.active{ color:#1b1614; background:var(--amber); border-color:var(--amber); font-weight:600; }
+  .mini-actions{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0 18px; }
+  .disabled{ opacity:.4; pointer-events:none; }
+  .canvas-wrap.brush canvas{ cursor:none; touch-action:none; }
+
+  .note{
+    font-size:11px; color:var(--text-dim); line-height:1.6; margin-top:22px;
+    border-top:1px solid var(--line); padding-top:16px;
+  }
+  .note b{ color:var(--text); }
+  .debug-caption{ font-size:11px; color:var(--text-dim); margin:-8px 0 16px; line-height:1.45; }
+  .debug-caption b{ color:var(--amber); font-weight:600; }
+  .copyright{
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    line-height:1.7;
+    color:var(--text-dim);
+    letter-spacing:.02em;
+  }
+  .copyright a{ color:var(--amber); text-decoration:none; }
+  .copyright a:hover{ text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="stage">
+    <div class="stage-header">
+      <div class="kicker"><span data-i18n="kicker">얼굴 인식 · 메시 변형</span> · v1.9.5</div>
+      <h1 data-i18n="appTitle">얼굴 리퀴파이</h1>
+    </div>
+
+    <div class="canvas-wrap brush" id="canvasWrap">
+      <canvas id="outCanvas" width="720" height="720"></canvas>
+      <div class="drop-hint" id="dropHint">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#948b85" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="1"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <div data-i18n="dropHint">이미지를 불러와 시작하세요</div>
+      </div>
+    </div>
+
+    <div class="status">
+      <span><span class="dot" id="modelDot"></span><span id="modelStatus">모델 대기 중</span></span>
+      <span><span class="dot" id="faceDot"></span><span id="faceStatus">얼굴 미검출</span></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-toolbar">
+      <button class="install-btn" id="installAppBtn" type="button" data-i18n="installApp" hidden>앱 설치</button>
+      <span class="lang-label" data-i18n="language">언어</span>
+      <select class="lang-select" id="languageSelect" aria-label="Language">
+        <option value="auto" data-i18n="languageAuto">자동 (브라우저)</option>
+        <option value="ko">한국어</option>
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+      </select>
+    </div>
+    <h2 data-i18n="sectionImage">이미지</h2>
+    <label class="file-btn">
+      <span data-i18n="chooseImage">이미지 선택 (JPG/PNG)</span>
+      <input type="file" id="fileInput" accept="image/*">
+    </label>
+
+    <h2 data-i18n="sectionEyesBrows">눈 / 눈썹</h2>
+    <div class="group">
+      <div class="slider-row"><label><span class="label-text" data-i18n="eyeWidth">눈 가로 크기</span> <span class="val" id="v-eyeWidth">0</span></label><input type="range" id="eyeWidth" min="-40" max="40" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="eyeHeight">눈 세로 크기</span> <span class="val" id="v-eyeHeight">0</span></label><input type="range" id="eyeHeight" min="-10" max="10" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="irisSize">홍채 크기</span> <span class="val" id="v-irisSize">0</span></label><input type="range" id="irisSize" min="-6" max="6" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="eyeDist">눈 사이 거리</span> <span class="val" id="v-eyeDist">0</span></label><input type="range" id="eyeDist" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="eyeTilt">눈꼬리 각도</span> <span class="val" id="v-eyeTilt">0</span></label><input type="range" id="eyeTilt" min="-40" max="40" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="browDist">눈-눈썹 거리</span> <span class="val" id="v-browDist">0</span></label><input type="range" id="browDist" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="browTilt">눈썹 각도</span> <span class="val" id="v-browTilt">0</span></label><input type="range" id="browTilt" min="-30" max="30" value="0"></div>
+    </div>
+
+    <h2 data-i18n="sectionNoseMouth">코 / 입</h2>
+    <div class="group">
+      <div class="slider-row"><label><span class="label-text" data-i18n="noseWidth">코 폭</span> <span class="val" id="v-noseWidth">0</span></label><input type="range" id="noseWidth" min="-40" max="40" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="noseLength">코 길이</span> <span class="val" id="v-noseLength">0</span></label><input type="range" id="noseLength" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="nostrilWidth">콧방울 폭</span> <span class="val" id="v-nostrilWidth">0</span></label><input type="range" id="nostrilWidth" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="noseShape">코 모양</span> <span class="val" id="v-noseShape">0</span></label><input type="range" id="noseShape" min="-25" max="25" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="mouthWidth">입 가로 크기</span> <span class="val" id="v-mouthWidth">0</span></label><input type="range" id="mouthWidth" min="-10" max="10" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="upperLip">윗입술 두께</span> <span class="val" id="v-upperLip">0</span></label><input type="range" id="upperLip" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="lowerLip">아랫입술 두께</span> <span class="val" id="v-lowerLip">0</span></label><input type="range" id="lowerLip" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="philtrum">인중 길이</span> <span class="val" id="v-philtrum">0</span></label><input type="range" id="philtrum" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="smile">입꼬리</span> <span class="val" id="v-smile">0</span></label><input type="range" id="smile" min="-20" max="20" value="0"></div>
+    </div>
+
+    <h2 data-i18n="sectionFace">얼굴형</h2>
+    <div class="group">
+      <div class="slider-row"><label><span class="label-text" data-i18n="midfaceLength">중안부 길이</span> <span class="val" id="v-faceHeight">0</span></label><input type="range" id="faceHeight" min="-30" max="30" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="chinWidth">턱끝 폭</span> <span class="val" id="v-chinWidth">0</span></label><input type="range" id="chinWidth" min="-25" max="25" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="jawline">턱선</span> <span class="val" id="v-jawline">0</span></label><input type="range" id="jawline" min="-25" max="25" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="faceWidth">얼굴 폭</span> <span class="val" id="v-faceWidth">0</span></label><input type="range" id="faceWidth" min="-25" max="25" value="0"></div>
+      <div class="slider-row"><label><span class="label-text" data-i18n="chinHeight">턱 높이</span> <span class="val" id="v-chin">0</span></label><input type="range" id="chin" min="-40" max="40" value="0"></div>
+    </div>
+
+    <h2 data-i18n="sectionDirect">직접 변형</h2>
+    <div class="tool-row">
+      <div class="toggle tool active" id="toolWarp" data-i18n="toolWarp">밀기</div>
+      <div class="toggle tool" id="toolSmooth" data-i18n="toolSmooth">완화</div>
+    </div>
+    <div class="group">
+      <div class="slider-row">
+        <label><span class="label-text" data-i18n="brushSize">브러시 크기</span> <span class="val" id="v-brushSize">90</span></label>
+        <input type="range" id="brushSize" min="30" max="240" value="90">
+      </div>
+      <div class="slider-row">
+        <label><span class="label-text" data-i18n="brushStrength">브러시 강도</span> <span class="val" id="v-brushStrength">45</span></label>
+        <input type="range" id="brushStrength" min="5" max="100" value="45">
+      </div>
+    </div>
+    <div class="mini-actions">
+      <div class="btn ghost" id="undoBtn" data-i18n="undo">실행 취소</div>
+      <div class="btn ghost" id="redoBtn" data-i18n="redo">다시 실행</div>
+    </div>
+
+    <div class="toggles">
+      <div class="toggle" id="toggleMesh" data-i18n="mesh">메시</div>
+      <div class="toggle" id="toggleLandmarks" data-i18n="controlPoints">제어점</div>
+      <div class="toggle active" id="toggleOriginal" data-i18n="holdOriginal">누르기: 원본</div>
+    </div>
+
+    <h2 data-i18n="sectionDebug">디버그 뷰</h2>
+    <div class="group">
+      <div class="slider-row"><label><span class="label-text" data-i18n="pointOpacity">제어점 투명도</span> <span class="val" id="v-pointOpacity">65</span></label><input type="range" id="pointOpacity" min="10" max="100" value="65"></div>
+    </div>
+    <div class="toggles">
+      <div class="toggle active" id="toggleInfluence" data-i18n="influenceColor">영향 컬러</div>
+      <div class="toggle active" id="toggleRawPts" data-i18n="rawPoints">원본 검출점</div>
+      <div class="toggle active" id="toggleRefinedPts" data-i18n="refinedPoints">보정점</div>
+      <div class="toggle active" id="toggleWarpPts" data-i18n="warpPoints">실사용 제어점</div>
+    </div>
+    <div class="debug-caption" id="vizStatus" data-i18n="debugWaiting">점 컬러 디버그 대기 중 · 슬라이더를 움직이면 실사용 제어점의 영향 강도를 점 자체의 색과 밝기로 표시합니다.</div>
+
+    <div class="actions">
+      <div class="btn ghost" id="resetBtn" data-i18n="reset">전체 초기화</div>
+      <div class="btn primary" id="downloadBtn" data-i18n="save">저장</div>
+    </div>
+
+    <div class="note">
+      <b data-i18n="helpTitle">사용법.</b> <span data-i18n="helpText">슬라이더를 더블클릭하면 해당 값이 초기화됩니다. 이미지 위를 드래그해 직접 밀어내며, 완화 도구는 수동 변형을 약화합니다. 브러시 크기는 [ 축소 / ] 확대. 누르기: 원본 버튼을 누르고 있는 동안 원본을 확인할 수 있습니다.</span>
+    </div>
+    <div class="copyright">
+      © 2026 Xpade Studio. All rights reserved.<br>
+      Created by <a href="https://www.threads.com/@xpade_kr" target="_blank" rel="noopener noreferrer">Xpade</a> · Face Liquify v1.9.5
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('outCanvas');
+  const ctx = canvas.getContext('2d');
+  const fileInput = document.getElementById('fileInput');
+  const dropHint = document.getElementById('dropHint');
+  const modelDot = document.getElementById('modelDot');
+  const modelStatus = document.getElementById('modelStatus');
+  const faceDot = document.getElementById('faceDot');
+  const faceStatus = document.getElementById('faceStatus');
+  const installAppBtn = document.getElementById('installAppBtn');
+
+  let img = null;
+  let landmarks = null; // refined landmarks in image pixel coords
+  let rawLandmarks = null; // raw detector landmarks before eye refinement
+  let irisLandmarks = []; // refined / mapped iris points
+  let rawIrisLandmarks = []; // raw detector iris points before eye refinement
+  let eyeMeshDebug = [];
+  let modelsReady = false;
+  let showMesh = false, showPoints = false;
+  let showOriginal = false, brushTool = 'warp';
+  let brushSize = 90, brushStrength = 45;
+  let pointOpacity = 0.65, showInfluence = true, activeVizSlider = null;
+  let showRawDetect = true, showRefinedDetect = true, showWarpPoints = true;
+  let manualControls = [];
+  let history = [], historyIndex = -1;
+  let pointer = {inside:false, down:false, x:0, y:0, lastX:0, lastY:0};
+  let renderQueued = false;
+
+  const GRID_COLS = 48, GRID_ROWS = 48; // 강한 변형에서도 폴리곤 형태가 드러나지 않도록 세분화
+
+  // PWA install support. Service worker works on HTTPS/localhost (not file://).
+  let deferredInstallPrompt = null;
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    if (installAppBtn) installAppBtn.hidden = false;
+  });
+  if (installAppBtn) installAppBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    installAppBtn.disabled = true;
+    try {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+    } finally {
+      deferredInstallPrompt = null;
+      installAppBtn.hidden = true;
+      installAppBtn.disabled = false;
+    }
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    if (installAppBtn) installAppBtn.hidden = true;
+  });
+
+
+  const sliders = ['eyeWidth','eyeHeight','irisSize','eyeDist','eyeTilt','browDist','browTilt','noseWidth','noseLength','nostrilWidth','noseShape','mouthWidth','upperLip','lowerLip','philtrum','faceHeight','chinWidth','smile','jawline','faceWidth','chin'];
+  const state = {};
+  const I18N = {
+    ko: {
+      title:'얼굴 리퀴파이 | 브라우저 얼굴 보정 도구 - Xpade Studio',
+      metaDescription:'브라우저에서 얼굴 사진을 로컬로 분석해 눈, 홍채, 코, 입술, 중안부, 턱선과 얼굴 폭을 세밀하게 조정할 수 있는 얼굴 리퀴파이 도구입니다.',
+      kicker:'얼굴 인식 · 메시 변형', appTitle:'얼굴 리퀴파이', language:'언어', languageAuto:'자동 (브라우저)', installApp:'앱 설치', dropHint:'이미지를 불러와 시작하세요',
+      sectionImage:'이미지', chooseImage:'이미지 선택 (JPG/PNG)', sectionEyesBrows:'눈 / 눈썹', sectionNoseMouth:'코 / 입', sectionFace:'얼굴형', sectionDirect:'직접 변형', sectionDebug:'디버그 뷰',
+      eyeWidth:'눈 가로 크기', eyeHeight:'눈 세로 크기', irisSize:'홍채 크기', eyeDist:'눈 사이 거리', eyeTilt:'눈꼬리 각도', browDist:'눈-눈썹 거리', browTilt:'눈썹 각도',
+      noseWidth:'코 폭', noseLength:'코 길이', nostrilWidth:'콧방울 폭', noseShape:'코 모양', mouthWidth:'입 가로 크기', upperLip:'윗입술 두께', lowerLip:'아랫입술 두께', philtrum:'인중 길이', smile:'입꼬리',
+      midfaceLength:'중안부 길이', chinWidth:'턱끝 폭', jawline:'턱선', faceWidth:'얼굴 폭', chinHeight:'턱 높이', brushSize:'브러시 크기', brushStrength:'브러시 강도', pointOpacity:'제어점 투명도',
+      toolWarp:'밀기', toolSmooth:'완화', undo:'실행 취소', redo:'다시 실행', mesh:'메시', controlPoints:'제어점', holdOriginal:'누르기: 원본', influenceColor:'영향 컬러', rawPoints:'원본 검출점', refinedPoints:'보정점', warpPoints:'실사용 제어점', reset:'전체 초기화', save:'저장',
+      helpTitle:'사용법.', helpText:'슬라이더를 더블클릭하면 해당 값이 초기화됩니다. 이미지 위를 드래그해 직접 밀어내며, 완화 도구는 수동 변형을 약화합니다. 브러시 크기는 [ 축소 / ] 확대. 누르기: 원본 버튼을 누르고 있는 동안 원본을 확인할 수 있습니다.',
+      modelWaiting:'모델 대기 중', modelReady:'모델 준비 완료', modelLoadFail:'모델 로드 실패: {error}', faceNotDetected:'얼굴 미검출', imageOnly:'이미지 파일만 사용할 수 있음', imageLoadFail:'이미지 로드 실패', fileReadFail:'파일 읽기 실패', analyzing:'얼굴 분석 중…', modelDelay:'모델 로드 지연 — 새로고침 후 재시도', faceDetectedIris:'얼굴 1개 감지됨 ({meshCount} pts · iris 10 · attention on{analysisLabel})', faceDetected:'얼굴 1개 감지됨 ({meshCount} pts · attention on{analysisLabel})', faceNotFound:'얼굴을 찾지 못함 — 정면 사진 권장', detectionError:'검출 오류: {error}', downloadFail:'다운로드 실패: {error}',
+      debugOff:'영향 컬러 꺼짐 · 점 종류별 기본 색상만 표시합니다.', debugWaiting:'점 컬러 디버그 대기 중 · 슬라이더를 움직이면 실사용 제어점의 영향 강도를 점 자체의 색과 밝기로 표시합니다.', debugActive:'현재 점 컬러 디버그 · <b>{name}</b> 영향 강도를 제어점 색/밝기로 표시 중'
+    },
+    en: {
+      title:'Face Liquify | Browser-Based Face Reshaping Tool - Xpade Studio',
+      metaDescription:'A browser-based face liquify tool for fine adjustments to eyes, iris, nose, lips, midface, jawline, and face width. Images are processed locally in your browser.',
+      kicker:'FACE DETECTION · MESH WARP', appTitle:'Face Liquify', language:'Language', languageAuto:'Auto (Browser)', installApp:'Install App', dropHint:'Load an image to get started',
+      sectionImage:'Image', chooseImage:'Choose Image (JPG/PNG)', sectionEyesBrows:'Eyes / Brows', sectionNoseMouth:'Nose / Mouth', sectionFace:'Face Shape', sectionDirect:'Direct Warp', sectionDebug:'Debug View',
+      eyeWidth:'Eye Width', eyeHeight:'Eye Height', irisSize:'Iris Size', eyeDist:'Eye Distance', eyeTilt:'Eye Tilt', browDist:'Eye–Brow Distance', browTilt:'Brow Angle',
+      noseWidth:'Nose Width', noseLength:'Nose Length', nostrilWidth:'Nostril Width', noseShape:'Nose Shape', mouthWidth:'Mouth Width', upperLip:'Upper Lip Thickness', lowerLip:'Lower Lip Thickness', philtrum:'Philtrum Length', smile:'Mouth Corners',
+      midfaceLength:'Midface Length', chinWidth:'Chin Width', jawline:'Jawline', faceWidth:'Face Width', chinHeight:'Chin Height', brushSize:'Brush Size', brushStrength:'Brush Strength', pointOpacity:'Point Opacity',
+      toolWarp:'Push', toolSmooth:'Smooth', undo:'Undo', redo:'Redo', mesh:'Mesh', controlPoints:'Control Points', holdOriginal:'Hold: Original', influenceColor:'Influence Color', rawPoints:'Raw Points', refinedPoints:'Refined Points', warpPoints:'Warp Points', reset:'Reset All', save:'Save',
+      helpTitle:'How to use.', helpText:'Double-click a slider to reset it. Drag directly on the image to push pixels; Smooth reduces manual warps. Use [ / ] to change brush size. Hold the Original button to compare with the source image.',
+      modelWaiting:'Waiting for model', modelReady:'Model ready', modelLoadFail:'Model load failed: {error}', faceNotDetected:'No face detected', imageOnly:'Please use an image file', imageLoadFail:'Image load failed', fileReadFail:'File read failed', analyzing:'Analyzing face…', modelDelay:'Model load delayed — refresh and try again', faceDetectedIris:'1 face detected ({meshCount} pts · iris 10 · attention on{analysisLabel})', faceDetected:'1 face detected ({meshCount} pts · attention on{analysisLabel})', faceNotFound:'No face found — a front-facing photo works best', detectionError:'Detection error: {error}', downloadFail:'Download failed: {error}',
+      debugOff:'Influence color off · showing default colors by point type.', debugWaiting:'Point-color debug ready · move a slider to display influence strength using point color and brightness.', debugActive:'Point-color debug · showing <b>{name}</b> influence strength by point color/brightness'
+    },
+    zh: {
+      title:'Face Liquify | 浏览器人脸液化工具 - Xpade Studio',
+      metaDescription:'在浏览器本地分析照片，可细致调整眼睛、虹膜、鼻子、嘴唇、中面部、下颌线和脸宽的人脸液化工具。',
+      kicker:'人脸识别 · 网格变形', appTitle:'Face Liquify', language:'语言', languageAuto:'自动（浏览器）', installApp:'安装应用', dropHint:'载入图片开始',
+      sectionImage:'图片', chooseImage:'选择图片 (JPG/PNG)', sectionEyesBrows:'眼睛 / 眉毛', sectionNoseMouth:'鼻子 / 嘴部', sectionFace:'脸型', sectionDirect:'直接变形', sectionDebug:'调试视图',
+      eyeWidth:'眼睛宽度', eyeHeight:'眼睛高度', irisSize:'虹膜大小', eyeDist:'眼距', eyeTilt:'眼尾角度', browDist:'眼睛-眉毛距离', browTilt:'眉毛角度',
+      noseWidth:'鼻宽', noseLength:'鼻长', nostrilWidth:'鼻翼宽度', noseShape:'鼻形', mouthWidth:'嘴部宽度', upperLip:'上唇厚度', lowerLip:'下唇厚度', philtrum:'人中长度', smile:'嘴角',
+      midfaceLength:'中面部长度', chinWidth:'下巴宽度', jawline:'下颌线', faceWidth:'脸宽', chinHeight:'下巴高度', brushSize:'画笔大小', brushStrength:'画笔强度', pointOpacity:'控制点透明度',
+      toolWarp:'推动', toolSmooth:'平滑', undo:'撤销', redo:'重做', mesh:'网格', controlPoints:'控制点', holdOriginal:'按住：原图', influenceColor:'影响颜色', rawPoints:'原始检测点', refinedPoints:'优化点', warpPoints:'实际控制点', reset:'全部重置', save:'保存',
+      helpTitle:'使用方法。', helpText:'双击滑块可恢复默认值。直接在图片上拖动可进行推动变形，平滑工具可减弱手动变形。使用 [ / ] 调整画笔大小。按住“原图”按钮可查看原始图片。',
+      modelWaiting:'等待模型', modelReady:'模型已就绪', modelLoadFail:'模型加载失败：{error}', faceNotDetected:'未检测到人脸', imageOnly:'仅支持图片文件', imageLoadFail:'图片加载失败', fileReadFail:'文件读取失败', analyzing:'正在分析人脸…', modelDelay:'模型加载延迟 — 请刷新后重试', faceDetectedIris:'检测到 1 张人脸 ({meshCount} pts · iris 10 · attention on{analysisLabel})', faceDetected:'检测到 1 张人脸 ({meshCount} pts · attention on{analysisLabel})', faceNotFound:'未找到人脸 — 建议使用正面照片', detectionError:'检测错误：{error}', downloadFail:'下载失败：{error}',
+      debugOff:'影响颜色已关闭 · 仅显示各类点的默认颜色。', debugWaiting:'点颜色调试待命 · 移动滑块后，将通过控制点颜色和亮度显示影响强度。', debugActive:'当前点颜色调试 · 正在用控制点颜色/亮度显示 <b>{name}</b> 的影响强度'
+    },
+    ja: {
+      title:'Face Liquify | ブラウザ顔補正ツール - Xpade Studio',
+      metaDescription:'ブラウザ内で写真をローカル解析し、目・虹彩・鼻・唇・中顔面・フェイスライン・顔幅を細かく調整できるFace Liquifyツールです。',
+      kicker:'顔検出 · メッシュ変形', appTitle:'Face Liquify', language:'言語', languageAuto:'自動（ブラウザ）', installApp:'アプリをインストール', dropHint:'画像を読み込んで開始',
+      sectionImage:'画像', chooseImage:'画像を選択 (JPG/PNG)', sectionEyesBrows:'目 / 眉', sectionNoseMouth:'鼻 / 口', sectionFace:'顔型', sectionDirect:'直接変形', sectionDebug:'デバッグビュー',
+      eyeWidth:'目の横幅', eyeHeight:'目の縦幅', irisSize:'虹彩サイズ', eyeDist:'目の間隔', eyeTilt:'目尻の角度', browDist:'目と眉の距離', browTilt:'眉の角度',
+      noseWidth:'鼻の幅', noseLength:'鼻の長さ', nostrilWidth:'小鼻の幅', noseShape:'鼻の形', mouthWidth:'口の横幅', upperLip:'上唇の厚さ', lowerLip:'下唇の厚さ', philtrum:'人中の長さ', smile:'口角',
+      midfaceLength:'中顔面の長さ', chinWidth:'顎先の幅', jawline:'フェイスライン', faceWidth:'顔幅', chinHeight:'顎の高さ', brushSize:'ブラシサイズ', brushStrength:'ブラシ強度', pointOpacity:'制御点の透明度',
+      toolWarp:'押す', toolSmooth:'なめらか', undo:'元に戻す', redo:'やり直す', mesh:'メッシュ', controlPoints:'制御点', holdOriginal:'長押し：元画像', influenceColor:'影響カラー', rawPoints:'元検出点', refinedPoints:'補正点', warpPoints:'実使用制御点', reset:'すべてリセット', save:'保存',
+      helpTitle:'使い方。', helpText:'スライダーをダブルクリックすると初期値に戻ります。画像上をドラッグして直接押し動かし、「なめらか」は手動変形を弱めます。[ / ] キーでブラシサイズを変更できます。「元画像」ボタンを押している間は元画像を確認できます。',
+      modelWaiting:'モデル待機中', modelReady:'モデル準備完了', modelLoadFail:'モデル読み込み失敗：{error}', faceNotDetected:'顔未検出', imageOnly:'画像ファイルのみ使用できます', imageLoadFail:'画像の読み込みに失敗', fileReadFail:'ファイルの読み込みに失敗', analyzing:'顔を解析中…', modelDelay:'モデル読み込み遅延 — 再読み込みして再試行してください', faceDetectedIris:'顔を1件検出 ({meshCount} pts · iris 10 · attention on{analysisLabel})', faceDetected:'顔を1件検出 ({meshCount} pts · attention on{analysisLabel})', faceNotFound:'顔が見つかりません — 正面写真を推奨', detectionError:'検出エラー：{error}', downloadFail:'ダウンロード失敗：{error}',
+      debugOff:'影響カラーOFF · 点の種類ごとの基本色のみ表示します。', debugWaiting:'点カラーデバッグ待機中 · スライダーを動かすと、制御点の色と明るさで影響度を表示します。', debugActive:'点カラーデバッグ · <b>{name}</b> の影響度を制御点の色/明るさで表示中'
+    }
+  };
+  const supportedLangs=['ko','en','zh','ja'];
+  function browserLanguage(){
+    const langs=(navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||'en']);
+    for(const raw of langs){ const base=String(raw).toLowerCase().split('-')[0]; if(supportedLangs.includes(base)) return base; }
+    return 'en';
+  }
+  function readLanguagePreference(){ try{return localStorage.getItem('faceLiquifyLanguage')||'auto';}catch(_){return 'auto';} }
+  function storeLanguagePreference(value){ try{localStorage.setItem('faceLiquifyLanguage',value);}catch(_){} }
+  let languagePreference=readLanguagePreference();
+  if(languagePreference!=='auto'&&!supportedLangs.includes(languagePreference)) languagePreference='auto';
+  let currentLanguage=languagePreference==='auto'?browserLanguage():languagePreference;
+  let currentModelStatus={key:'modelWaiting',vars:{}};
+  let currentFaceStatus={key:'faceNotDetected',vars:{}};
+  function t(key,vars={}){
+    const dict=I18N[currentLanguage]||I18N.en;
+    let s=(dict[key]??I18N.en[key]??I18N.ko[key]??key);
+    return String(s).replace(/\{(\w+)\}/g,(_,k)=>vars[k]===undefined?`{${k}}`:String(vars[k]));
+  }
+  function setModelStatus(key,vars={}){ currentModelStatus={key,vars}; modelStatus.textContent=t(key,vars); }
+  function setFaceStatus(key,vars={}){ currentFaceStatus={key,vars}; faceStatus.textContent=t(key,vars); }
+  function applyLanguage(pref=languagePreference){
+    languagePreference=pref;
+    currentLanguage=pref==='auto'?browserLanguage():pref;
+    document.documentElement.lang=currentLanguage==='zh'?'zh-CN':currentLanguage;
+    document.querySelectorAll('[data-i18n]').forEach(el=>{ const key=el.dataset.i18n; el.textContent=t(key); });
+    const selector=document.getElementById('languageSelect');
+    if(selector){ selector.value=pref; selector.setAttribute('aria-label',t('language')); }
+    document.title=t('title');
+    const meta=document.querySelector('meta[name="description"]'); if(meta) meta.setAttribute('content',t('metaDescription'));
+    const ogt=document.querySelector('meta[property="og:title"]'); if(ogt) ogt.setAttribute('content',t('appTitle')+' | Xpade Studio');
+    const ogd=document.querySelector('meta[property="og:description"]'); if(ogd) ogd.setAttribute('content',t('metaDescription'));
+    modelStatus.textContent=t(currentModelStatus.key,currentModelStatus.vars);
+    faceStatus.textContent=t(currentFaceStatus.key,currentFaceStatus.vars);
+    updateVizStatus();
+  }
+  const languageSelect=document.getElementById('languageSelect');
+  languageSelect.addEventListener('change',()=>{
+    languagePreference=languageSelect.value;
+    storeLanguagePreference(languagePreference);
+    applyLanguage(languagePreference);
+  });
+  applyLanguage(languagePreference);
+  sliders.forEach(id=>{
+    const el = document.getElementById(id);
+    const label = document.getElementById('v-'+id);
+    state[id] = 0;
+    const activateViz = ()=>{ activeVizSlider = id; updateVizStatus(); };
+    el.addEventListener('pointerdown', activateViz);
+    el.addEventListener('focus', activateViz);
+    el.addEventListener('input', ()=>{
+      state[id] = parseFloat(el.value);
+      label.textContent = el.value;
+      activeVizSlider = id;
+      updateVizStatus();
+      queueRender();
+    });
+    el.addEventListener('change', ()=>{ commitHistory(); updateVizStatus(); });
+  });
+
+  function snapshot(){ return {state:{...state}, manual:manualControls.map(p=>({...p}))}; }
+  function commitHistory(){
+    history=history.slice(0,historyIndex+1); history.push(snapshot()); historyIndex=history.length-1;
+    if(history.length>40){ history.shift(); historyIndex--; }
+    updateHistoryButtons();
+  }
+  function restoreSnapshot(snap){
+    Object.assign(state,snap.state); manualControls=snap.manual.map(p=>({...p}));
+    sliders.forEach(id=>{document.getElementById(id).value=state[id];document.getElementById('v-'+id).textContent=state[id];});
+    updateHistoryButtons(); queueRender();
+  }
+  function updateHistoryButtons(){
+    document.getElementById('undoBtn').classList.toggle('disabled',historyIndex<=0);
+    document.getElementById('redoBtn').classList.toggle('disabled',historyIndex>=history.length-1);
+  }
+  function queueRender(){ if(renderQueued)return; renderQueued=true; requestAnimationFrame(()=>{renderQueued=false;render();}); }
+
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    sliders.forEach(id=>{
+      document.getElementById(id).value = 0;
+      state[id] = 0;
+      document.getElementById('v-'+id).textContent = '0';
+    });
+    manualControls=[]; commitHistory(); queueRender();
+  });
+
+  document.getElementById('undoBtn').addEventListener('click',()=>{if(historyIndex>0)restoreSnapshot(history[--historyIndex]);});
+  document.getElementById('redoBtn').addEventListener('click',()=>{if(historyIndex<history.length-1)restoreSnapshot(history[++historyIndex]);});
+  const brushSizeEl=document.getElementById('brushSize'), brushStrengthEl=document.getElementById('brushStrength');
+  brushSizeEl.addEventListener('input',()=>{brushSize=+brushSizeEl.value;document.getElementById('v-brushSize').textContent=brushSize;queueRender();});
+  brushStrengthEl.addEventListener('input',()=>{brushStrength=+brushStrengthEl.value;document.getElementById('v-brushStrength').textContent=brushStrength;});
+
+  // Photoshop-style brush size shortcuts: [ smaller / ] larger
+  document.addEventListener('selectstart', e=>{
+    const t=e.target;
+    if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+  });
+  document.addEventListener('dragstart', e=>{
+    const t=e.target;
+    if(t && (t.tagName==='IMG' || t.tagName==='LABEL' || t.classList?.contains('btn') || t.classList?.contains('toggle'))) e.preventDefault();
+  });
+
+  window.addEventListener('keydown', e=>{
+    if(e.ctrlKey || e.metaKey || e.altKey) return;
+    if(e.key !== '[' && e.key !== ']') return;
+    const tag=(e.target?.tagName||'').toLowerCase();
+    if(tag==='input' && e.target.type!=='range') return;
+    if(tag==='textarea' || e.target?.isContentEditable) return;
+    e.preventDefault();
+    const min=Number(brushSizeEl.min)||30, max=Number(brushSizeEl.max)||240;
+    const step=10;
+    brushSize=Math.max(min,Math.min(max,brushSize + (e.key===']'?step:-step)));
+    brushSizeEl.value=brushSize;
+    document.getElementById('v-brushSize').textContent=brushSize;
+    queueRender();
+  });
+  // 모든 슬라이더는 더블클릭하면 HTML에 정의된 기본값으로 복귀한다.
+  document.querySelectorAll('input[type="range"]').forEach(el=>el.addEventListener('dblclick',e=>{
+    e.preventDefault(); el.value=el.defaultValue; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+  }));
+  function setTool(tool){brushTool=tool;document.getElementById('toolWarp').classList.toggle('active',tool==='warp');document.getElementById('toolSmooth').classList.toggle('active',tool==='smooth');}
+  document.getElementById('toolWarp').addEventListener('click',()=>setTool('warp'));
+  document.getElementById('toolSmooth').addEventListener('click',()=>setTool('smooth'));
+
+  document.getElementById('toggleMesh').addEventListener('click', function(){
+    showMesh = !showMesh; this.classList.toggle('active', showMesh); queueRender();
+  });
+  document.getElementById('toggleLandmarks').addEventListener('click', function(){
+    showPoints = !showPoints; this.classList.toggle('active', showPoints); queueRender();
+  });
+
+  const beforeBtn=document.getElementById('toggleOriginal');
+  beforeBtn.addEventListener('pointerdown',e=>{e.preventDefault();showOriginal=true;queueRender();});
+  const releaseBefore=()=>{if(showOriginal){showOriginal=false;queueRender();}};
+  window.addEventListener('pointerup',releaseBefore); beforeBtn.addEventListener('pointerleave',releaseBefore);
+
+  const pointOpacityEl=document.getElementById('pointOpacity');
+  pointOpacityEl.addEventListener('input',()=>{ pointOpacity=(+pointOpacityEl.value)/100; document.getElementById('v-pointOpacity').textContent=pointOpacityEl.value; queueRender(); });
+  document.getElementById('toggleInfluence').addEventListener('click', function(){
+    showInfluence=!showInfluence; this.classList.toggle('active', showInfluence); updateVizStatus(); queueRender();
+  });
+  document.getElementById('toggleRawPts').addEventListener('click', function(){ showRawDetect=!showRawDetect; this.classList.toggle('active', showRawDetect); queueRender(); });
+  document.getElementById('toggleRefinedPts').addEventListener('click', function(){ showRefinedDetect=!showRefinedDetect; this.classList.toggle('active', showRefinedDetect); queueRender(); });
+  document.getElementById('toggleWarpPts').addEventListener('click', function(){ showWarpPoints=!showWarpPoints; this.classList.toggle('active', showWarpPoints); queueRender(); });
+
+  function sliderDisplayName(id){
+    const el=document.getElementById(id);
+    if(!el) return '';
+    const label=el.closest('.slider-row')?.querySelector('label');
+    if(!label) return id;
+    return label.textContent.replace(/-?\d+\s*$/,'').trim();
+  }
+  function updateVizStatus(){
+    const box=document.getElementById('vizStatus');
+    if(!box) return;
+    if(!showInfluence){ box.innerHTML=t('debugOff'); return; }
+    if(!activeVizSlider){ box.innerHTML=t('debugWaiting'); return; }
+    box.innerHTML=t('debugActive',{name:sliderDisplayName(activeVizSlider)});
+  }
+  updateVizStatus();
+
+  function canvasPoint(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height};}
+  canvas.addEventListener('pointerenter',e=>{pointer.inside=true;Object.assign(pointer,canvasPoint(e));queueRender();});
+  canvas.addEventListener('pointerleave',()=>{pointer.inside=false;if(!pointer.down)queueRender();});
+  canvas.addEventListener('pointerdown',e=>{if(!img)return;canvas.setPointerCapture(e.pointerId);const p=canvasPoint(e);Object.assign(pointer,{down:true,inside:true,x:p.x,y:p.y,lastX:p.x,lastY:p.y});});
+  canvas.addEventListener('pointermove',e=>{
+    if(!img)return;const p=canvasPoint(e);pointer.x=p.x;pointer.y=p.y;
+    if(pointer.down){
+      const s=img.width/canvas.width;
+      if(brushTool==='warp'){
+        const dx=p.x-pointer.lastX,dy=p.y-pointer.lastY;
+        if(dx*dx+dy*dy>.3){const gain=brushStrength/100;manualControls.push({x:pointer.lastX*s,y:pointer.lastY*s,dx:dx*s*gain,dy:dy*s*gain,r:brushSize*s*.5,group:'brush-'+manualControls.length,unmasked:true});pointer.lastX=p.x;pointer.lastY=p.y;}
+      }else{
+        const rr=brushSize*s*.5,cx=p.x*s,cy=p.y*s;
+        manualControls=manualControls.filter(c=>{const d=Math.hypot(c.x-cx,c.y-cy);if(d<rr){const keep=Math.max(.1,d/rr);c.dx*=keep;c.dy*=keep;return Math.hypot(c.dx,c.dy)>.08;}return true;});
+      }
+    }
+    queueRender();
+  });
+  canvas.addEventListener('pointerup',e=>{if(!pointer.down)return;pointer.down=false;try{canvas.releasePointerCapture(e.pointerId);}catch(_){}commitHistory();queueRender();});
+
+  document.getElementById('downloadBtn').addEventListener('click', ()=>{
+    if(!img){ return; }
+    try{
+      const exportCanvas = landmarks ? renderFullResExportCanvas() : (()=>{
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        c.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
+        return c;
+      })();
+      const dataUrl = exportCanvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.download = 'liquify-result.png';
+      a.href = dataUrl;
+      document.body.appendChild(a); // 일부 샌드박스는 DOM에 붙은 앵커만 클릭을 허용함
+      a.click();
+      document.body.removeChild(a);
+    }catch(e){
+      console.error('download failed', e);
+      setFaceStatus('downloadFail',{error:e.message});
+    }
+  });
+
+  // ---------- model loading ----------
+  let human = null;
+  async function loadModels(){
+    try{
+      const HumanCtor = (window.Human && window.Human.default) ? window.Human.default : window.Human;
+      human = new HumanCtor({
+        modelBasePath: 'https://cdn.jsdelivr.net/npm/@vladmandic/human/models/',
+        backend: 'webgl',
+        face: {
+          enabled: true,
+          detector: { maxDetected: 1 },
+          mesh: { enabled: true },
+          attention: { enabled: true },
+          iris: { enabled: true },
+          description: { enabled: false },
+          emotion: { enabled: false },
+          antispoof: { enabled: false },
+          liveness: { enabled: false }
+        },
+        body: { enabled: false },
+        hand: { enabled: false },
+        object: { enabled: false },
+        gesture: { enabled: false },
+        segmentation: { enabled: false }
+      });
+      await human.load();
+      modelsReady = true;
+      modelDot.classList.add('ok');
+      setModelStatus('modelReady');
+      console.log('human.load() 완료');
+    }catch(e){
+      setModelStatus('modelLoadFail',{error:e.message});
+      console.error('loadModels 오류', e);
+    }
+  }
+  loadModels();
+
+  // ---------- image loading ----------
+  async function loadImageFile(file){
+    if(!file || !file.type || !file.type.startsWith('image/')){ setFaceStatus('imageOnly'); return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const image = new Image();
+      image.onload = async ()=>{
+        img = image; landmarks=null; irisLandmarks=[]; manualControls=[]; history=[]; historyIndex=-1;
+        dropHint.style.display = 'none';
+        fitCanvas();
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        await detectFace();
+        commitHistory(); render();
+      };
+      image.onerror = (err)=>{ console.error('image load failed', err); setFaceStatus('imageLoadFail'); };
+      image.src = reader.result;
+    };
+    reader.onerror = (err)=>{ console.error('file read failed', err); setFaceStatus('fileReadFail'); };
+    reader.readAsDataURL(file);
+  }
+  fileInput.addEventListener('change', e=>loadImageFile(e.target.files[0]));
+  const canvasWrap=document.getElementById('canvasWrap');
+  ['dragenter','dragover'].forEach(type=>canvasWrap.addEventListener(type,e=>{e.preventDefault();e.stopPropagation();canvasWrap.classList.add('dragover');}));
+  ['dragleave','drop'].forEach(type=>canvasWrap.addEventListener(type,e=>{e.preventDefault();e.stopPropagation();canvasWrap.classList.remove('dragover');}));
+  canvasWrap.addEventListener('drop',e=>{const file=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(file) loadImageFile(file);});
+
+  function fitCanvas(){
+    const max = 720;
+    const scale = Math.min(max/img.width, max/img.height, 1);
+    canvas.width = Math.round(img.width*scale);
+    canvas.height = Math.round(img.height*scale);
+  }
+
+  const ANALYSIS_MAX = 1600;
+
+  function withTimeout(promise, ms){
+    return Promise.race([
+      promise,
+      new Promise((_, rej)=>setTimeout(()=>rej(new Error('timeout')), ms))
+    ]);
+  }
+
+  async function detectFace(){
+    faceDot.classList.remove('ok'); faceDot.classList.add('busy');
+    setFaceStatus('analyzing');
+    if(!modelsReady){
+      let tries = 0;
+      while(!modelsReady && tries < 75){ await new Promise(r=>setTimeout(r,200)); tries++; }
+      if(!modelsReady){
+        faceDot.classList.remove('busy');
+        setFaceStatus('modelDelay');
+        return;
+      }
+    }
+    try{
+      console.log('detect() 시작', img.width, img.height);
+      const analysisCanvas = document.createElement('canvas');
+      const longest = Math.max(img.width, img.height);
+      const analysisScale = longest > ANALYSIS_MAX ? (ANALYSIS_MAX / longest) : 1;
+      analysisCanvas.width = Math.max(1, Math.round(img.width * analysisScale));
+      analysisCanvas.height = Math.max(1, Math.round(img.height * analysisScale));
+      const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: false });
+      analysisCtx.drawImage(img, 0, 0, analysisCanvas.width, analysisCanvas.height);
+      const sx = img.width / analysisCanvas.width;
+      const sy = img.height / analysisCanvas.height;
+
+      const result = await withTimeout(human.detect(analysisCanvas), 20000);
+      console.log('detect() 결과', result);
+      if(result.face && result.face.length){
+        const face = result.face[0];
+        // Detect on a capped-size analysis canvas, then scale landmarks back to original image space.
+        landmarks = face.mesh.map(p=>({x:p[0] * sx, y:p[1] * sy}));
+        rawLandmarks = landmarks.map(p=>({x:p.x,y:p.y}));
+        irisLandmarks = [];
+        rawIrisLandmarks = [];
+        const ann = face.annotations || {};
+        const irisSets = [ann.leftEyeIris, ann.rightEyeIris].filter(a=>Array.isArray(a) && a.length >= 5);
+        if(irisSets.length){
+          irisLandmarks = irisSets.map(a=>({points:a.slice(0,5).map(p=>({x:p[0] * sx,y:p[1] * sy}))}));
+        } else if(face.mesh && face.mesh.length >= 478){
+          irisLandmarks = [
+            {points:face.mesh.slice(468,473).map(p=>({x:p[0] * sx,y:p[1] * sy}))},
+            {points:face.mesh.slice(473,478).map(p=>({x:p[0] * sx,y:p[1] * sy}))}
+          ];
+        }
+        rawIrisLandmarks = irisLandmarks.map(set=>({points:set.points.map(p=>({x:p.x,y:p.y}))}));
+        // Attention mesh should provide better eye landmarks; custom post-refine was likely introducing the left-eye drift,
+        // so we bypass it for now and use detector output directly.
+        // refineEyeLandmarks(landmarks, irisLandmarks, analysisCanvas, sx, sy);
+        faceDot.classList.remove('busy'); faceDot.classList.add('ok');
+        const meshCount = face.mesh?.length || 0;
+        const analysisLabel = analysisScale < 1 ? ` · detect ${analysisCanvas.width}×${analysisCanvas.height}` : '';
+        if(irisLandmarks.length===2) setFaceStatus('faceDetectedIris',{meshCount,analysisLabel}); else setFaceStatus('faceDetected',{meshCount,analysisLabel});
+      } else {
+        faceDot.classList.remove('busy');
+        setFaceStatus('faceNotFound');
+        landmarks = null; rawLandmarks = null; irisLandmarks = []; rawIrisLandmarks = [];
+      }
+    }catch(e){
+      faceDot.classList.remove('busy');
+      setFaceStatus('detectionError',{error:e.message});
+      console.error('detectFace 오류', e);
+    }
+  }
+
+
+  // MediaPipe canonical 468-point face mesh indices
+  const IDX = {
+    jaw: [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
+    leftEye: [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246],
+    rightEye: [362,382,381,380,374,373,390,249,263,466,388,387,386,385,384,398],
+    nose: [1,2,98,327,168,197,5,4,45,275],
+    mouthOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
+    chin: [148,152,377],
+    leftBrow: [70,63,105,66,107,55,65,52,53,46],
+    rightBrow: [300,293,334,296,336,285,295,282,283,276],
+    upperLipOuter: [61,185,40,39,37,0,267,269,270,409,291],
+    lowerLipOuter: [61,146,91,181,84,17,314,405,321,375,291],
+    upperLipInner: [78,191,80,81,82,13,312,311,310,415,308],
+    lowerLipInner: [78,95,88,178,87,14,317,402,318,324,308]
+  };
+  const LOWER_JAW = [234,93,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,323,454];
+  const FACE_SIDES = [127,162,21,54,103,67,109,234,93,132,58,172,136,150,149,176,148,377,400,378,379,365,397,288,361,323,454,356,389,251,284,332,297,338];
+
+
+  function refineEyeLandmarks(lm, irisLm, sampleCanvas, sx, sy){
+    if(!lm || !sampleCanvas) return;
+    const ctx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+    const imgData = ctx.getImageData(0,0,sampleCanvas.width,sampleCanvas.height);
+    const data = imgData.data, W = imgData.width, H = imgData.height;
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+    const luma=(x,y)=>{
+      x=clamp(x,0,W-1); y=clamp(y,0,H-1);
+      const x0=Math.floor(x), y0=Math.floor(y), x1=Math.min(W-1,x0+1), y1=Math.min(H-1,y0+1);
+      const tx=x-x0, ty=y-y0;
+      const idx=(xx,yy)=>((yy*W+xx)<<2);
+      const lumAt=(i)=>data[i]*0.299+data[i+1]*0.587+data[i+2]*0.114;
+      const a=lumAt(idx(x0,y0)), b=lumAt(idx(x1,y0)), c=lumAt(idx(x0,y1)), d=lumAt(idx(x1,y1));
+      return (a*(1-tx)+b*tx)*(1-ty) + (c*(1-tx)+d*tx)*ty;
+    };
+    const eyes=[
+      {ring:IDX.leftEye, upper:[161,160,159,158,157], lower:[144,145,153,154,155], inner:133, outer:33},
+      {ring:IDX.rightEye, upper:[388,387,386,385,384], lower:[381,380,374,373,390], inner:362, outer:263}
+    ];
+
+    const lmA = lm.map(p=>({x:p.x/sx, y:p.y/sy}));
+    const irisA = (irisLm||[]).map(set=>({points:(set.points||[]).map(p=>({x:p.x/sx, y:p.y/sy}))}));
+    const irisByEye = (()=>{
+      const result=[null,null];
+      if(irisA.length<2) return result;
+      const leftC=centroid(lmA, IDX.leftEye), rightC=centroid(lmA, IDX.rightEye);
+      const centers=irisA.map(set=> set?.points?.length ? centroid(set.points, set.points.map((_,i)=>i)) : null);
+      if(!centers[0] || !centers[1]) return result;
+      const costA=Math.hypot(centers[0].x-leftC.x,centers[0].y-leftC.y)+Math.hypot(centers[1].x-rightC.x,centers[1].y-rightC.y);
+      const costB=Math.hypot(centers[1].x-leftC.x,centers[1].y-leftC.y)+Math.hypot(centers[0].x-rightC.x,centers[0].y-rightC.y);
+      return costA<=costB ? [irisA[0], irisA[1]] : [irisA[1], irisA[0]];
+    })();
+
+    const eyeState = eyes.map((cfg, eyeNo)=>{
+      const inner=lmA[cfg.inner], outer=lmA[cfg.outer];
+      let ex={x:outer.x-inner.x, y:outer.y-inner.y};
+      const el=Math.hypot(ex.x,ex.y)||1; ex={x:ex.x/el, y:ex.y/el};
+      let ey={x:-ex.y, y:ex.x};
+      const center=centroid(lmA, cfg.ring);
+      const avgV=(arr)=>arr.reduce((s,i)=>s+((lmA[i].x-center.x)*ey.x + (lmA[i].y-center.y)*ey.y),0)/arr.length;
+      if(avgV(cfg.upper) > avgV(cfg.lower)) ey={x:-ey.x, y:-ey.y};
+      const irisC = irisByEye[eyeNo]?.points?.length ? centroid(irisByEye[eyeNo].points, irisByEye[eyeNo].points.map((_,i)=>i)) : center;
+      return {cfg, eyeNo, center, inner, outer, ex, ey, el, irisC, score:0, count:0};
+    });
+
+    function snapGroup(stateObj, idxs, searchNeg, searchPos, normalBias=1){
+      const {center, ex, ey, irisC, el} = stateObj;
+      idxs.forEach((idx,k)=>{
+        const p=lmA[idx];
+        const u=(p.x-center.x)*ex.x + (p.y-center.y)*ex.y;
+        const edge=Math.min(1, Math.abs(u)/(el*0.52 || 1));
+        const sampleSpan = 1.8 + edge*0.8;
+        let best={score:-1e9, x:p.x, y:p.y};
+        for(let t=searchNeg; t<=searchPos; t+=0.75){
+          const cx=p.x + ey.x*t, cy=p.y + ey.y*t;
+          const centerLum=(luma(cx,cy)+luma(cx+ex.x,cy+ex.y)+luma(cx-ex.x,cy-ex.y))/3;
+          const aLum=(luma(cx+ey.x*sampleSpan,cy+ey.y*sampleSpan)+luma(cx+ey.x*sampleSpan+ex.x,cy+ey.y*sampleSpan+ex.y)+luma(cx+ey.x*sampleSpan-ex.x,cy+ey.y*sampleSpan-ex.y))/3;
+          const bLum=(luma(cx-ey.x*sampleSpan,cy-ey.y*sampleSpan)+luma(cx-ey.x*sampleSpan+ex.x,cy-ey.y*sampleSpan+ex.y)+luma(cx-ey.x*sampleSpan-ex.x,cy-ey.y*sampleSpan-ex.y))/3;
+          const contrast=((aLum+bLum)*0.5 - centerLum);
+          const irisDist=Math.hypot(cx-irisC.x, cy-irisC.y);
+          const irisPenalty=Math.max(0, (8.5-irisDist))*0.055; // avoid dragging lid into iris
+          const penalty=Math.abs(t)*0.05 + edge*Math.abs(t)*0.02;
+          const score=contrast*normalBias - penalty - irisPenalty;
+          if(score>best.score) best={score, x:cx, y:cy};
+        }
+        // conservative blend toward snapped position
+        const blend = 0.72 - edge*0.12;
+        lmA[idx].x = p.x*(1-blend) + best.x*blend;
+        lmA[idx].y = p.y*(1-blend) + best.y*blend;
+        stateObj.score += best.score;
+        stateObj.count += 1;
+      });
+    }
+
+    eyeState.forEach(st=>{
+      snapGroup(st, st.cfg.upper, -8, 4, 1);
+      snapGroup(st, st.cfg.lower, -4, 6, 1);
+      // Nudge eye corners vertically toward nearby lid average to reduce obvious misplacement.
+      const innerAdj = [(st.cfg.upper[0]), (st.cfg.lower[-1]||st.cfg.lower[0])];
+      const innerY = (lmA[st.cfg.upper[0]].y + lmA[st.cfg.lower[st.cfg.lower.length-1]].y)*0.5;
+      const outerY = (lmA[st.cfg.upper[st.cfg.upper.length-1]].y + lmA[st.cfg.lower[0]].y)*0.5;
+      lmA[st.cfg.inner].y = lmA[st.cfg.inner].y*0.7 + innerY*0.3;
+      lmA[st.cfg.outer].y = lmA[st.cfg.outer].y*0.7 + outerY*0.3;
+    });
+
+    // Symmetry-assisted fallback: if one eye scored much worse, borrow the other eye's lid arc in local coordinates.
+    const conf = eyeState.map(st=>st.count?st.score/st.count:-999);
+    let bad = -1, good = -1;
+    if(conf[0] < conf[1]-0.35){ bad = 0; good = 1; }
+    else if(conf[1] < conf[0]-0.35){ bad = 1; good = 0; }
+    if(bad >= 0){
+      const b=eyeState[bad], g=eyeState[good];
+      const mapPoint=(srcIdx)=>{
+        const p=lmA[srcIdx];
+        const u=(p.x-g.center.x)*g.ex.x + (p.y-g.center.y)*g.ex.y;
+        const v=(p.x-g.center.x)*g.ey.x + (p.y-g.center.y)*g.ey.y;
+        return {x:b.center.x + u*b.ex.x + v*b.ey.x, y:b.center.y + u*b.ex.y + v*b.ey.y};
+      };
+      const pairs=[
+        [g.cfg.upper, b.cfg.upper],
+        [g.cfg.lower, b.cfg.lower]
+      ];
+      pairs.forEach(([goodArr,badArr])=>{
+        goodArr.forEach((gIdx, j)=>{
+          const tgt=mapPoint(gIdx);
+          lmA[badArr[j]].x = lmA[badArr[j]].x*0.28 + tgt.x*0.72;
+          lmA[badArr[j]].y = lmA[badArr[j]].y*0.28 + tgt.y*0.72;
+        });
+      });
+    }
+
+    // Mild bilateral regularization: keep lid arcs locally consistent without forcing perfect symmetry.
+    [[eyes[0].upper, eyes[1].upper],[eyes[0].lower, eyes[1].lower]].forEach(([arrL,arrR])=>{
+      arrL.forEach((idxL,j)=>{
+        const idxR=arrR[j];
+        const stL=eyeState[0], stR=eyeState[1];
+        const pL=lmA[idxL], pR=lmA[idxR];
+        const uL=((pL.x-stL.center.x)*stL.ex.x + (pL.y-stL.center.y)*stL.ex.y)/(stL.el*0.5||1);
+        const vL=((pL.x-stL.center.x)*stL.ey.x + (pL.y-stL.center.y)*stL.ey.y)/(Math.max(3,Math.abs((lmA[arrL[2]].x-stL.center.x)*stL.ey.x + (lmA[arrL[2]].y-stL.center.y)*stL.ey.y))||1);
+        const uR=((pR.x-stR.center.x)*stR.ex.x + (pR.y-stR.center.y)*stR.ex.y)/(stR.el*0.5||1);
+        const vR=((pR.x-stR.center.x)*stR.ey.x + (pR.y-stR.center.y)*stR.ey.y)/(Math.max(3,Math.abs((lmA[arrR[2]].x-stR.center.x)*stR.ey.x + (lmA[arrR[2]].y-stR.center.y)*stR.ey.y))||1);
+        const mu=(uL+uR)*0.5, mv=(vL+vR)*0.5;
+        const confL=Math.max(-2,Math.min(2,conf[0]));
+        const confR=Math.max(-2,Math.min(2,conf[1]));
+        const wL=confL<confR?0.22:0.08;
+        const wR=confR<confL?0.22:0.08;
+        const tL={x:stL.center.x + (mu*(stL.el*0.5))*stL.ex.x + (mv*Math.max(3,Math.abs((lmA[arrL[2]].x-stL.center.x)*stL.ey.x + (lmA[arrL[2]].y-stL.center.y)*stL.ey.y)))*stL.ey.x,
+                  y:stL.center.y + (mu*(stL.el*0.5))*stL.ex.y + (mv*Math.max(3,Math.abs((lmA[arrL[2]].x-stL.center.x)*stL.ey.x + (lmA[arrL[2]].y-stL.center.y)*stL.ey.y)))*stL.ey.y};
+        const tR={x:stR.center.x + (mu*(stR.el*0.5))*stR.ex.x + (mv*Math.max(3,Math.abs((lmA[arrR[2]].x-stR.center.x)*stR.ey.x + (lmA[arrR[2]].y-stR.center.y)*stR.ey.y)))*stR.ey.x,
+                  y:stR.center.y + (mu*(stR.el*0.5))*stR.ex.y + (mv*Math.max(3,Math.abs((lmA[arrR[2]].x-stR.center.x)*stR.ey.x + (lmA[arrR[2]].y-stR.center.y)*stR.ey.y)))*stR.ey.y};
+        lmA[idxL].x = pL.x*(1-wL)+tL.x*wL; lmA[idxL].y = pL.y*(1-wL)+tL.y*wL;
+        lmA[idxR].x = pR.x*(1-wR)+tR.x*wR; lmA[idxR].y = pR.y*(1-wR)+tR.y*wR;
+      });
+    });
+
+    // scale refined points back to original image coordinates
+    [...eyes[0].ring, ...eyes[1].ring].forEach(idx=>{
+      lm[idx].x = lmA[idx].x * sx;
+      lm[idx].y = lmA[idx].y * sy;
+    });
+  }
+
+  function centroid(lm, idxs){
+    let x=0,y=0;
+    idxs.forEach(i=>{ x+=lm[i].x; y+=lm[i].y; });
+    return {x:x/idxs.length, y:y/idxs.length};
+  }
+
+  function boundsOf(lm, idxs, padX=1, padY=1){
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    idxs.forEach(i=>{const p=lm[i];minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
+    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    return {type:'ellipse',cx,cy,rx:Math.max(2,(maxX-minX)/2*padX),ry:Math.max(2,(maxY-minY)/2*padY)};
+  }
+  function compactMask(x,y,m){
+    if(!m)return 1;
+    const nx=(x-m.cx)/m.rx,ny=(y-m.cy)/m.ry,r=Math.sqrt(nx*nx+ny*ny);
+    let radial;
+    if(r>=1) radial=0;
+    else if(r<=.62) radial=1;
+    else { const t=(r-.62)/.38,s=t*t*(3-2*t); radial=1-s; }
+    if(radial<=0) return 0;
+    // 선택적 하단 컷오프: 눈썹 변형이 눈 영역으로 번지는 것을 막되 경계는 부드럽게 페더링
+    if(Number.isFinite(m.yMax)){
+      const feather=Math.max(1,m.yFeather||4);
+      if(y>=m.yMax+feather) return 0;
+      if(y>m.yMax){
+        const t=(y-m.yMax)/feather;
+        const s=t*t*(3-2*t);
+        radial*=1-s;
+      }
+    }
+    return radial;
+  }
+
+  // Build a sparse set of control points + their displacement vectors based on slider state
+  // lm: landmark array already scaled to the target render size (display canvas or full-res export canvas)
+  // scale: targetWidth / 720 — used to scale the fixed-pixel-amount sliders (eyeDist, smile, chin) so they look the same regardless of output resolution
+  function buildControlPoints(lm, scale, irisLm){
+    const pts = [];
+    if(!lm) return pts;
+
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+    const faceC = centroid(lm, IDX.jaw);
+    const leftEyeC = centroid(lm, IDX.leftEye);
+    const rightEyeC = centroid(lm, IDX.rightEye);
+    const mouthC = centroid(lm, IDX.mouthOuter);
+    const upperLipC = centroid(lm, [...IDX.upperLipOuter, ...IDX.upperLipInner]);
+    const lowerLipC = centroid(lm, [...IDX.lowerLipOuter, ...IDX.lowerLipInner]);
+
+    const EYES = [
+      {
+        all: IDX.leftEye,
+        upper: [161,160,159,158,157],
+        lower: [144,145,153,154,155],
+        corners: [33,133],
+        inner: 133,
+        outer: 33,
+        nearInner: [173,157,158],
+        nearOuter: [7,163,144],
+        center: leftEyeC,
+        eyeNo: 0
+      },
+      {
+        all: IDX.rightEye,
+        upper: [388,387,386,385,384],
+        lower: [381,380,374,373,390],
+        corners: [362,263],
+        inner: 362,
+        outer: 263,
+        nearInner: [398,384,385],
+        nearOuter: [382,381,380],
+        center: rightEyeC,
+        eyeNo: 1
+      }
+    ];
+
+    // 478-mode: 두 iris를 좌/우 눈에 1:1 공간 매칭한다.
+    // Human/MediaPipe의 left/right naming 방향에 의존하지 않고 실제 이미지 좌표로 대응한다.
+    function buildIrisProtectMasks(){
+      const result=[null,null];
+      if(!irisLm || irisLm.length < 2) return result;
+      const valid=irisLm.slice(0,2).map(set=>{
+        if(!set?.points?.length) return null;
+        const c=centroid(set.points,set.points.map((_,i)=>i));
+        let rx=0,ry=0;
+        set.points.forEach(p=>{rx=Math.max(rx,Math.abs(p.x-c.x));ry=Math.max(ry,Math.abs(p.y-c.y));});
+        return {set,c,rx,ry};
+      });
+      if(!valid[0] || !valid[1]) return result;
+      const eyeCenters=[leftEyeC,rightEyeC];
+      const costA=Math.hypot(valid[0].c.x-eyeCenters[0].x,valid[0].c.y-eyeCenters[0].y)+Math.hypot(valid[1].c.x-eyeCenters[1].x,valid[1].c.y-eyeCenters[1].y);
+      const costB=Math.hypot(valid[1].c.x-eyeCenters[0].x,valid[1].c.y-eyeCenters[0].y)+Math.hypot(valid[0].c.x-eyeCenters[1].x,valid[0].c.y-eyeCenters[1].y);
+      const ordered=costA<=costB ? [valid[0],valid[1]] : [valid[1],valid[0]];
+      ordered.forEach((v,i)=>{
+        result[i]={type:'ellipse',cx:v.c.x,cy:v.c.y,rx:Math.max(3,v.rx*1.50),ry:Math.max(3,v.ry*1.50)};
+      });
+      return result;
+    }
+    const irisProtectMasks=buildIrisProtectMasks();
+
+    // Eye width: 중심 기준 좌표 부호를 사용해 좌/우 눈이 정확히 미러링되도록 한다.
+    EYES.forEach(cfg=>{
+      const box=boundsOf(lm,cfg.all,1.24,1.14);
+      const span=Math.max(4,Math.abs(lm[cfg.outer].x-lm[cfg.inner].x));
+      const amt=state.eyeWidth/40*span*0.024;
+      const group='eyeWidth'+cfg.eyeNo;
+      const protect=irisProtectMasks[cfg.eyeNo];
+      const push=(i,weight)=>{
+        const p=lm[i];
+        const side=p.x<cfg.center.x?-1:1;
+        pts.push({x:p.x,y:p.y,dx:side*amt*weight,dy:0,r:box.rx*.30,group,mask:box,protect,protectStrength:.985});
+      };
+      // 코너가 가장 크게, 가운데 눈꺼풀은 자연스럽게 덜 따라온다.
+      push(cfg.outer,.26);
+      push(cfg.inner,.26);
+      cfg.nearOuter.forEach(i=>push(i,.14));
+      cfg.nearInner.forEach(i=>push(i,.14));
+      cfg.upper.forEach(i=>{
+        const p=lm[i],nx=clamp(Math.abs(p.x-cfg.center.x)/(box.rx||1),0,1);
+        push(i,.06+.05*nx);
+      });
+      cfg.lower.forEach(i=>{
+        const p=lm[i],nx=clamp(Math.abs(p.x-cfg.center.x)/(box.rx||1),0,1);
+        push(i,.05+.05*nx);
+      });
+      if(!protect){
+        const ax=box.rx*.18,ay=Math.max(1.5,box.ry*.18);
+        [[0,0],[-ax,0],[ax,0],[0,-ay],[0,ay]].forEach(([ox,oy])=>{
+          pts.push({x:cfg.center.x+ox,y:cfg.center.y+oy,dx:0,dy:0,r:box.rx*.22,group,mask:box});
+        });
+      }
+    });
+
+    // Eye height: 홍채 영역은 보존하고 위/아래 눈꺼풀만 대칭적으로 벌린다.
+    EYES.forEach(cfg=>{
+      const box=boundsOf(lm,cfg.all,1.12,1.06);
+      const eyeH=Math.max(3,box.ry*1.18);
+      const amt=state.eyeHeight/10*eyeH*0.24;
+      const group='eyeHeight'+cfg.eyeNo;
+      const protect=irisProtectMasks[cfg.eyeNo];
+      cfg.upper.forEach(i=>{
+        const p=lm[i];
+        const nx=clamp(Math.abs(p.x-cfg.center.x)/(box.rx||1),0,1);
+        const w=1.22-.18*nx;
+        pts.push({x:p.x,y:p.y,dx:0,dy:-amt*w,r:box.rx*.20,group,mask:box,protect,protectStrength:.995});
+      });
+      cfg.lower.forEach(i=>{
+        const p=lm[i];
+        const nx=clamp(Math.abs(p.x-cfg.center.x)/(box.rx||1),0,1);
+        const w=1.16-.16*nx;
+        pts.push({x:p.x,y:p.y,dx:0,dy:amt*w,r:box.rx*.20,group,mask:box,protect,protectStrength:.995});
+      });
+      // 코너는 세로 크기 변화의 약 16%만 따라가 눈꼬리 형태를 유지한다.
+      cfg.corners.forEach(i=>{
+        const p=lm[i];
+        const sign=p.y<cfg.center.y?-1:1;
+        pts.push({x:p.x,y:p.y,dx:0,dy:sign*amt*.20,r:box.rx*.12,group,mask:box,protect,protectStrength:.995});
+      });
+      if(!protect){
+        const ax=box.rx*.18,ay=Math.max(1.4,box.ry*.18);
+        [[0,0],[-ax,0],[ax,0],[0,-ay],[0,ay],[-ax*.55,-ay*.5],[ax*.55,-ay*.5],[-ax*.55,ay*.5],[ax*.55,ay*.5]].forEach(([ox,oy])=>{
+          pts.push({x:cfg.center.x+ox,y:cfg.center.y+oy,dx:0,dy:0,r:box.rx*.18,group,mask:box});
+        });
+      }
+    });
+
+    // Eye distance: v1.0 스타일로 복귀
+    {
+      const distAmt = state.eyeDist/30 * 6 * scale;
+      const dir = rightEyeC.x > leftEyeC.x ? 1 : -1;
+      const leftMask=boundsOf(lm,IDX.leftEye,2.0,2.25), rightMask=boundsOf(lm,IDX.rightEye,2.0,2.25);
+      IDX.leftEye.forEach(i=>pts.push({x:lm[i].x,y:lm[i].y,dx:-dir*distAmt,dy:0,r:leftMask.rx*.68,group:'eyeDistL',mask:leftMask}));
+      IDX.rightEye.forEach(i=>pts.push({x:lm[i].x,y:lm[i].y,dx:dir*distAmt,dy:0,r:rightMask.rx*.68,group:'eyeDistR',mask:rightMask}));
+    }
+
+    // Eye tilt: v1.0 스타일로 복귀
+    EYES.forEach(cfg=>{
+      const box=boundsOf(lm,cfg.all,1.8,2.25);
+      const angle=state.eyeTilt/40*(Math.PI/15)*(cfg.eyeNo===0?1:-1);
+      const cos=Math.cos(angle),sin=Math.sin(angle);
+      cfg.all.forEach(i=>{
+        const p=lm[i],px=p.x-cfg.center.x,py=p.y-cfg.center.y,rx=px*cos-py*sin,ry=px*sin+py*cos;
+        pts.push({x:p.x,y:p.y,dx:rx-px,dy:ry-py,r:box.rx*.62,group:'eyeTilt'+cfg.eyeNo,mask:box});
+      });
+    });
+
+    // Brow distance: 중앙은 유지하고 앞/꼬리는 support를 늘려 모양이 꺾이지 않게 조정
+    [[IDX.leftBrow, IDX.leftEye, 0],[IDX.rightBrow, IDX.rightEye, 1]].forEach(([brow,eye,side])=>{
+      const bc=centroid(lm,brow), ec=centroid(lm,eye), browBox=boundsOf(lm,brow,1.14,1.22);
+      const gap=Math.max(6, Math.abs(ec.y-bc.y));
+      const yMax=bc.y + gap*.11;
+      const mask={
+        type:'ellipse',
+        cx:bc.x,
+        cy:bc.y-gap*.18,
+        rx:browBox.rx*1.10,
+        ry:Math.max(4.6,gap*.50),
+        yMax,
+        yFeather:Math.max(1.6,gap*.08)
+      };
+      const d = state.browDist/30 * gap * 0.34 * (bc.y < ec.y ? -1 : 1);
+      const group='browDist'+side;
+      const edgeSet = new Set([brow[0], brow[1], brow[brow.length-2], brow[brow.length-1]]);
+      brow.forEach(i=>{
+        const p=lm[i];
+        const edgeBoost = edgeSet.has(i) ? 1.08 : 1.0;
+        pts.push({x:p.x,y:p.y,dx:0,dy:d*edgeBoost,r:mask.rx*(edgeSet.has(i)?0.26:0.24),group,mask});
+      });
+      const skinPts = side===0 ? [70,63,105,66,107,55,65,52,46] : [300,293,334,296,336,285,295,282,276];
+      skinPts.forEach(i=>{
+        const p=lm[i];
+        const edgeBoost = (i===70||i===46||i===300||i===276) ? 1.08 : 1.0;
+        pts.push({x:p.x,y:p.y,dx:0,dy:d*.46*edgeBoost,r:mask.rx*.22,group,mask});
+      });
+      // fixed supports below the brow head/tail to prevent eyelid-like kinks
+      const supportIdx = side===0 ? [35,124,53,52,46] : [265,353,283,282,276];
+      supportIdx.forEach(i=>{
+        const p=lm[i];
+        pts.push({x:p.x,y:p.y,dx:0,dy:0,r:mask.rx*.18,group,mask});
+      });
+    });
+
+    // Brow tilt: v1.2 유지
+    [[IDX.leftBrow,0],[IDX.rightBrow,1]].forEach(([brow,side])=>{
+      const bc=centroid(lm,brow), browBox=boundsOf(lm,brow,1.05,1.10);
+      const mask={type:'ellipse',cx:bc.x,cy:bc.y-browBox.ry*.12,rx:browBox.rx*.98,ry:browBox.ry*.92};
+      const angle = state.browTilt/30*(Math.PI/32)*(side===0?1:-1);
+      const cos=Math.cos(angle),sin=Math.sin(angle);
+      brow.forEach(i=>{
+        const p=lm[i],px=p.x-bc.x,py=p.y-bc.y,rx=px*cos-py*sin,ry=px*sin+py*cos;
+        pts.push({x:p.x,y:p.y,dx:rx-px,dy:ry-py,r:mask.rx*.18,group:'browTilt'+side,mask});
+      });
+    });
+
+    // Nose width
+    {
+      const leftNose=[193,122,196,3,51,45,220,115,48,64,98];
+      const rightNose=[417,351,419,248,281,275,440,344,278,294,327];
+      const allNose=[168,6,197,195,5,4,45,275,98,327,...leftNose,...rightNose];
+      const mask=boundsOf(lm,allNose,1.12,1.08), bridgeY=lm[168].y, bottomY=Math.max(lm[98].y,lm[327].y);
+      const half=Math.abs(lm[327].x-lm[98].x)/2;
+      const delta=state.noseWidth/40*half*.22;
+      [[leftNose,-1,'L'],[rightNose,1,'R']].forEach(([idxs,side,name])=>idxs.forEach(i=>{
+        const p=lm[i], t=clamp((p.y-bridgeY)/(bottomY-bridgeY||1),0,1), weight=.20+.80*t;
+        pts.push({x:p.x,y:p.y,dx:side*delta*weight,dy:0,r:mask.rx*.28,group:'noseWidth'+name,mask});
+      }));
+    }
+
+    // Nose length
+    {
+      const bridge=[168,6,197,195];
+      const mid=[5,45,275,220,440];
+      const tip=[4,1,2];
+      const base=[98,327,115,344,48,278,64,294];
+      const all=[...bridge,...mid,...tip,...base];
+      const mask=boundsOf(lm,all,1.18,1.32);
+      const amt=state.noseLength/30*6.8*scale;
+      bridge.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:0,dy:amt*.16,r:mask.rx*.24,group:'noseLenBridge',mask});});
+      mid.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:0,dy:amt*.36,r:mask.rx*.24,group:'noseLenMid',mask});});
+      tip.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:0,dy:amt*.66,r:mask.rx*.24,group:'noseLenTip',mask});});
+      base.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:0,dy:amt*.52,r:mask.rx*.22,group:'noseLenBase',mask});});
+    }
+
+    // Nostril width: 영역을 아주 조금 넓힘
+    {
+      const half=Math.max(3, Math.abs(lm[327].x-lm[98].x)/2);
+      const noseBaseY=(lm[98].y+lm[327].y)/2;
+      const amt=state.nostrilWidth/30*half*.18;
+      const leftPts=[98,64,48,115];
+      const rightPts=[327,294,278,344];
+      const leftMask={type:'ellipse',cx:(lm[98].x+lm[64].x+lm[48].x)/3,cy:noseBaseY,rx:half*1.28,ry:Math.max(5.0,half*.88)};
+      const rightMask={type:'ellipse',cx:(lm[327].x+lm[294].x+lm[278].x)/3,cy:noseBaseY,rx:half*1.28,ry:Math.max(5.0,half*.88)};
+      leftPts.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:-amt,dy:0,r:leftMask.rx*.22,group:'nostrilL',mask:leftMask});});
+      rightPts.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:amt,dy:0,r:rightMask.rx*.22,group:'nostrilR',mask:rightMask});});
+    }
+
+    // Mouth width: 입꼬리 이동량을 더 분명하게 하고 전체 외곽이 같이 따라오게 조정
+    {
+      const mask=boundsOf(lm,IDX.mouthOuter,1.30,1.40), half=Math.abs(lm[291].x-lm[61].x)/2;
+      const delta=state.mouthWidth/10*half*.11;
+      const leftLip=[61,146,91,181,84,17,0,37,39,40,185], rightLip=[291,375,321,405,314,17,0,267,269,270,409];
+      [[leftLip,-1,'L'],[rightLip,1,'R']].forEach(([idxs,side,name])=>idxs.forEach(i=>{
+        const p=lm[i];
+        const nx=Math.min(1,Math.abs(p.x-mouthC.x)/(half||1));
+        const distanceWeight=.28+.72*(nx*nx);
+        const cornerBoost = (i===61||i===291) ? 1.90 : (i===146||i===375||i===91||i===321||i===185||i===409 ? 1.30 : 0.92);
+        pts.push({x:p.x,y:p.y,dx:side*delta*distanceWeight*cornerBoost,dy:0,r:mask.rx*.16,group:'mouthWidth'+name,mask});
+      }));
+      // inner lip and nearby support so outer corner movement propagates naturally
+      [[78,191,80,81,82,13,312,311,-1,'L'],[308,415,310,311,312,14,87,178,1,'R']].forEach(arr=>{
+        const idxs=arr.slice(0,-2), side=arr[arr.length-2], name=arr[arr.length-1];
+        idxs.forEach(i=>{
+          if(i<0 || !lm[i]) return;
+          const p=lm[i];
+          const nx=Math.min(1,Math.abs(p.x-mouthC.x)/(half||1));
+          pts.push({x:p.x,y:p.y,dx:side*delta*(.14+.28*nx),dy:0,r:mask.rx*.14,group:'mouthWidth'+name,mask});
+        });
+      });
+    }
+
+    // Upper / lower lip thickness: full-width contour coverage while keeping upper/lower separation.
+    {
+      const upperOuterCore=[185,40,39,37,0,267,269,270,409];
+      const upperInnerCore=[191,80,81,82,13,312,311,310,415];
+      const lowerOuterCore=[146,91,181,84,17,314,405,321,375];
+      const lowerInnerCore=[95,88,178,87,14,317,402,318,324];
+      const upperAll=[61,...upperOuterCore,291,78,...upperInnerCore,308];
+      const lowerAll=[61,...lowerOuterCore,291,78,...lowerInnerCore,308];
+      const upperBox=boundsOf(lm,upperAll,1.22,1.10);
+      const lowerBox=boundsOf(lm,lowerAll,1.24,1.12);
+      // Wider horizontal masks prevent the ellipse falloff from killing side-lip deformation.
+      const upperMask={type:'ellipse',cx:upperLipC.x,cy:upperLipC.y,rx:upperBox.rx*1.32,ry:upperBox.ry*.88};
+      const lowerMask={type:'ellipse',cx:lowerLipC.x,cy:lowerLipC.y+lowerBox.ry*.10,rx:lowerBox.rx*1.32,ry:lowerBox.ry*.90};
+      const mouthHalf=Math.max(4,Math.abs(lm[291].x-lm[61].x)/2);
+      const ua=state.upperLip/30*3.8*scale;
+      const la=state.lowerLip/30*6.2*scale;
+      const lipWeight=(p,centerX)=>{
+        const nx=clamp(Math.abs(p.x-centerX)/(mouthHalf||1),0,1);
+        // Keep the center strong, but retain ~80% of the effect toward the side lobes.
+        return 1.0-.20*nx;
+      };
+
+      upperOuterCore.forEach(i=>{
+        const p=lm[i],w=lipWeight(p,upperLipC.x);
+        pts.push({x:p.x,y:p.y,dx:0,dy:-ua*w,r:upperMask.rx*.15,group:'upperLipOuter',mask:upperMask});
+      });
+      upperInnerCore.forEach(i=>{
+        const p=lm[i],w=lipWeight(p,upperLipC.x);
+        pts.push({x:p.x,y:p.y,dx:0,dy:ua*.56*w,r:upperMask.rx*.13,group:'upperLipInner',mask:upperMask});
+      });
+      // Corner-adjacent supports move only a little, so thickness reaches the sides without changing mouth width.
+      [[61,-1],[291,1]].forEach(([i,side])=>{
+        const p=lm[i];
+        pts.push({x:p.x,y:p.y,dx:0,dy:-ua*.24,r:upperMask.rx*.12,group:'upperLipOuter',mask:upperMask});
+      });
+      [78,308].forEach(i=>{
+        const p=lm[i];
+        pts.push({x:p.x,y:p.y,dx:0,dy:ua*.18,r:upperMask.rx*.11,group:'upperLipInner',mask:upperMask});
+      });
+
+      lowerOuterCore.forEach(i=>{
+        const p=lm[i],w=lipWeight(p,lowerLipC.x);
+        pts.push({x:p.x,y:p.y,dx:0,dy:la*w,r:lowerMask.rx*.17,group:'lowerLipOuter',mask:lowerMask});
+      });
+      lowerInnerCore.forEach(i=>{
+        const p=lm[i],w=lipWeight(p,lowerLipC.x);
+        pts.push({x:p.x,y:p.y,dx:0,dy:-la*.72*w,r:lowerMask.rx*.14,group:'lowerLipInner',mask:lowerMask});
+      });
+      [[61,-1],[291,1]].forEach(([i,side])=>{
+        const p=lm[i];
+        pts.push({x:p.x,y:p.y,dx:0,dy:la*.24,r:lowerMask.rx*.13,group:'lowerLipOuter',mask:lowerMask});
+      });
+      [78,308].forEach(i=>{
+        const p=lm[i];
+        pts.push({x:p.x,y:p.y,dx:0,dy:-la*.18,r:lowerMask.rx*.11,group:'lowerLipInner',mask:lowerMask});
+      });
+    }
+
+    // Philtrum
+    {
+      const centerLip=[0,37,267,13,82,312,61,291], mask=boundsOf(lm,centerLip,1.40,1.70), amt=state.philtrum/30*4.8*scale;
+      centerLip.forEach(i=>{const p=lm[i];pts.push({x:p.x,y:p.y,dx:0,dy:amt,r:mask.rx*.24,group:'philtrum',mask});});
+    }
+
+    // Mouth corner
+    {
+      const amt=state.smile/20*5*scale;
+      const mouthBox=boundsOf(lm,IDX.mouthOuter,1,1), half=Math.abs(lm[291].x-lm[61].x)/2;
+      const lipHeight=Math.max(4,mouthBox.ry*2);
+      const left=new Map([[61,1],[185,.52],[146,.42],[91,.22]]);
+      const right=new Map([[291,1],[409,.52],[375,.42],[321,.22]]);
+      [[left,61,'L'],[right,291,'R']].forEach(([points,cornerIndex,name])=>{
+        const corner=lm[cornerIndex];
+        const localMask={type:'ellipse',cx:corner.x,cy:corner.y,rx:half*.48,ry:lipHeight*1.32};
+        points.forEach((w,i)=>{const p=lm[i]; pts.push({x:p.x,y:p.y,dx:0,dy:-amt*w,r:localMask.rx*.36,group:'mouthCorner'+name,mask:localMask}); });
+      });
+    }
+
+    // Midface length (legacy id: faceHeight)
+    {
+      const facePts=[...new Set([
+        ...IDX.jaw,...IDX.leftBrow,...IDX.rightBrow,...IDX.leftEye,...IDX.rightEye,...IDX.nose,...IDX.mouthOuter,...IDX.upperLipInner,...IDX.lowerLipInner,
+        10,67,109,338,297,54,103,67,109,284,332,297,338,127,162,21,389,356,251,234,454,205,425,70,46,300,276
+      ])];
+      const topY=lm[10].y, bottomY=lm[152].y, centerY=(topY+bottomY)/2;
+      const jawMinX=Math.min(...IDX.jaw.map(i=>lm[i].x)), jawMaxX=Math.max(...IDX.jaw.map(i=>lm[i].x));
+      const mask={type:'ellipse',cx:faceC.x,cy:centerY,rx:(jawMaxX-jawMinX)/2*1.18,ry:(bottomY-topY)/2*1.22};
+      const amt=state.faceHeight/30*0.095;
+      facePts.forEach(i=>{
+        const p=lm[i];
+        const rel=(p.y-centerY)/((bottomY-topY)/2||1);
+        const topBias = p.y < leftEyeC.y ? 1.28 : 1.0;
+        const sideBias = Math.abs(p.x-faceC.x) > (mask.rx*.40) ? 1.18 : 1.0;
+        const weight=(.90+.10*Math.abs(rel))*topBias*sideBias;
+        pts.push({x:p.x,y:p.y,dx:0,dy:(p.y-centerY)*amt*weight,r:mask.rx*.24,group:'faceHeight',mask});
+      });
+    }
+
+    // Nose shape: 기존 광대폭에서 우연히 유용했던 코 주변 변형을 별도 기능으로 유지
+    {
+      const shapeL=[50,205,117,118,119,100,126];
+      const shapeR=[280,425,346,347,348,329,355];
+      const shapeMask=boundsOf(lm,[...shapeL,...shapeR],1.06,1.12);
+      const sAmt=state.noseShape/25*.10;
+      shapeL.forEach(i=>{ const p=lm[i]; pts.push({x:p.x,y:p.y,dx:-shapeMask.rx*sAmt*.28,dy:0,r:shapeMask.rx*.13,group:'noseShapeL',mask:shapeMask}); });
+      shapeR.forEach(i=>{ const p=lm[i]; pts.push({x:p.x,y:p.y,dx:shapeMask.rx*sAmt*.28,dy:0,r:shapeMask.rx*.13,group:'noseShapeR',mask:shapeMask}); });
+    }
+
+    // Chin width: 턱끝 중심은 유지하되 인접 턱 라인으로 조금 더 자연스럽게 퍼지도록 중간 단계로 조정
+    {
+      const chinCore=[149,176,148,152,377,400,378];
+      const chinNeighbor=[150,136,172,365,379,397];
+      const chinMask=boundsOf(lm,chinCore,1.19,1.18);
+      const chinC=centroid(lm,chinCore);
+      const chAmt=state.chinWidth/25*.142;
+      chinCore.forEach(i=>{
+        const p=lm[i];
+        const edge=clamp(Math.abs(p.x-chinC.x)/(chinMask.rx||1),0,1);
+        const curve=1-Math.pow(1-edge,1.7);
+        const weight=.50 + .26*curve;
+        pts.push({x:p.x,y:p.y,dx:(p.x-chinC.x)*chAmt*weight,dy:0,r:chinMask.rx*.29,group:'chinWidthCore',mask:chinMask});
+      });
+      chinNeighbor.forEach(i=>{
+        const p=lm[i];
+        const edge=clamp(Math.abs(p.x-chinC.x)/(chinMask.rx||1),0,1);
+        const curve=1-Math.pow(1-edge,1.35);
+        const weight=.18 + .18*curve;
+        pts.push({x:p.x,y:p.y,dx:(p.x-chinC.x)*chAmt*weight,dy:0,r:chinMask.rx*.25,group:'chinWidthSoft',mask:chinMask});
+      });
+    }
+
+    // Jawline: 국소 깨짐을 줄이기 위해 더 넓고 부드럽게 슬리밍
+    {
+      const jawPts=[234,93,132,58,172,136,150,149,176,148,377,400,378,379,365,397,288,361,323,454];
+      const mask=boundsOf(lm,jawPts,1.14,1.24);
+      const amt = state.jawline/25 * 0.082;
+      jawPts.forEach(i=>{
+        const p = lm[i];
+        const v = clamp((p.y-mouthC.y)/(lm[152].y-mouthC.y||1),0,1);
+        const weight = .52 + .48*v;
+        pts.push({x:p.x,y:p.y,dx:(faceC.x-p.x)*amt*weight,dy:0,r:mask.rx*.18,group:'jawline',mask});
+      });
+    }
+
+    // Face width
+    {
+      const amt = state.faceWidth/25 * 0.10;
+      const mask=boundsOf(lm,IDX.jaw,1.04,1.05);
+      FACE_SIDES.forEach(i=>{ const p = lm[i]; pts.push({x:p.x,y:p.y,dx:(p.x-faceC.x)*amt,dy:0,r:mask.rx*.12,group:'faceWidth',mask}); });
+    }
+
+    // Chin height
+    {
+      const chinPts=[149,176,148,152,377,400,378,150,379];
+      const mask=boundsOf(lm,chinPts,1.18,1.45);
+      const chinC=lm[152];
+      const amt = state.chin/40 * 8.8 * scale;
+      chinPts.forEach(i=>{
+        const p=lm[i];
+        const nx=clamp(Math.abs(p.x-chinC.x)/(mask.rx||1),0,1);
+        const sideWeight=.46 + .54*(1-nx);
+        const verticalWeight=.60 + .40*clamp((p.y-mouthC.y)/(chinC.y-mouthC.y||1),0,1);
+        pts.push({x:p.x,y:p.y,dx:0,dy:amt*sideWeight*verticalWeight,r:mask.rx*.16,group:'chin',mask});
+      });
+    }
+
+    const manualScale=scale*REF_WIDTH/img.width;
+    manualControls.forEach(c=>pts.push({x:c.x*manualScale,y:c.y*manualScale,dx:c.dx*manualScale,dy:c.dy*manualScale,r:c.r*manualScale,group:c.group,unmasked:true}));
+    return pts;
+  }
+
+  // 순수 가중평균 RBF 변위 (정규화 버그 수정판) — wsum이 작아도 항상 진짜 가중평균만 반환
+  function rbfDisplacement(x, y, controls, sigma){
+    if(controls.length === 0) return {dx:0, dy:0};
+    const groups=new Map();
+    for(const c of controls){
+      const ddx = x-c.x, ddy = y-c.y;
+      const d2 = ddx*ddx + ddy*ddy;
+      const ss=c.r||sigma,w=Math.exp(-d2/(2*ss*ss));
+      if(w<.001)continue;
+      const g=groups.get(c.group)||{w:0,dx:0,dy:0,max:0,unmasked:false,mask:c.mask,protect:c.protect||null,protectStrength:c.protectStrength||0};
+      g.w+=w;g.dx+=w*c.dx;g.dy+=w*c.dy;g.max=Math.max(g.max,w);g.unmasked||=!!c.unmasked;
+      if(c.protect){g.protect=c.protect;g.protectStrength=Math.max(g.protectStrength,c.protectStrength||1);}
+      groups.set(c.group,g);
+    }
+    let dx=0,dy=0,manualDx=0,manualDy=0;
+    groups.forEach(g=>{if(g.w<1e-6)return;const radial=g.max*g.max*(3-2*g.max);let f=radial*compactMask(x,y,g.mask);if(g.protect){const protect=compactMask(x,y,g.protect);f*=Math.max(0,1-protect*g.protectStrength);}if(g.unmasked){manualDx+=(g.dx/g.w)*f;manualDy+=(g.dy/g.w)*f;}else{dx+=(g.dx/g.w)*f;dy+=(g.dy/g.w)*f;}});
+    return {dx,dy,manualDx,manualDy};
+  }
+
+  // 얼굴 타원 바깥은 완전히 0으로 차단, 경계는 부드럽게 페더링
+  function computeFaceGeom(lm){
+    let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    const geomPts=[...new Set([...IDX.jaw,10,67,109,338,297,54,284,103,332,70,46,300,276])];
+    geomPts.forEach(i=>{
+      const p = lm[i];
+      minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+      minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y);
+    });
+    return { cx:(minX+maxX)/2, cy:(minY+maxY)/2, rx:((maxX-minX)/2 || 1)*1.04, ry:((maxY-minY)/2 || 1)*1.06 };
+  }
+  function faceMask(x, y, geom){
+    const dx = (x-geom.cx)/geom.rx, dy = (y-geom.cy)/geom.ry;
+    const r = Math.sqrt(dx*dx + dy*dy);
+    const inner = 0.92, outer = 1.34; // inner 안쪽은 100% 효과, outer 밖은 0%
+    if(r <= inner) return 1;
+    if(r >= outer) return 0;
+    const t = (r-inner)/(outer-inner);
+    return 1 - t*t*(3-2*t); // smoothstep
+  }
+
+
+  // Eye-local piecewise-affine warp. Eye size sliders are handled here, outside the global RBF field.
+  function delaunayTriangulate(points){
+    if(points.length < 3) return [];
+    const pts=points.map(p=>({x:p.x,y:p.y}));
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    pts.forEach(p=>{minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);});
+    const dx=maxX-minX,dy=maxY-minY,d=Math.max(dx,dy)||1,cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+    const s0=pts.length,s1=pts.length+1,s2=pts.length+2;
+    pts.push({x:cx-20*d,y:cy-12*d},{x:cx,y:cy+20*d},{x:cx+20*d,y:cy-12*d});
+    let tris=[[s0,s1,s2]];
+    const circum=(a,b,c)=>{
+      const ax=pts[a].x,ay=pts[a].y,bx=pts[b].x,by=pts[b].y,cx0=pts[c].x,cy0=pts[c].y;
+      const den=2*(ax*(by-cy0)+bx*(cy0-ay)+cx0*(ay-by));
+      if(Math.abs(den)<1e-9) return {x:0,y:0,r2:-1};
+      const a2=ax*ax+ay*ay,b2=bx*bx+by*by,c2=cx0*cx0+cy0*cy0;
+      const ux=(a2*(by-cy0)+b2*(cy0-ay)+c2*(ay-by))/den;
+      const uy=(a2*(cx0-bx)+b2*(ax-cx0)+c2*(bx-ax))/den;
+      const rx=ux-ax,ry=uy-ay;
+      return {x:ux,y:uy,r2:rx*rx+ry*ry};
+    };
+    for(let pi=0;pi<points.length;pi++){
+      const bad=[];
+      for(let ti=0;ti<tris.length;ti++){
+        const t=tris[ti],cc=circum(t[0],t[1],t[2]);
+        if(cc.r2<0) continue;
+        const qx=points[pi].x-cc.x,qy=points[pi].y-cc.y;
+        if(qx*qx+qy*qy <= cc.r2+1e-6) bad.push(ti);
+      }
+      const edges=[];
+      const addEdge=(a,b)=>{
+        const lo=Math.min(a,b),hi=Math.max(a,b),key=lo+','+hi;
+        const found=edges.find(e=>e.key===key);
+        if(found) found.count++; else edges.push({a:lo,b:hi,key,count:1});
+      };
+      bad.sort((a,b)=>b-a).forEach(ti=>{
+        const t=tris[ti]; addEdge(t[0],t[1]);addEdge(t[1],t[2]);addEdge(t[2],t[0]); tris.splice(ti,1);
+      });
+      edges.filter(e=>e.count===1).forEach(e=>tris.push([e.a,e.b,pi]));
+    }
+    return tris.filter(t=>t[0]<points.length&&t[1]<points.length&&t[2]<points.length);
+  }
+
+  function matchIrisToEyes(irisLm,leftC,rightC){
+    if(!irisLm || irisLm.length<2) return [null,null];
+    const v=irisLm.slice(0,2).map(set=>{
+      if(!set?.points?.length) return null;
+      let x=0,y=0; set.points.forEach(p=>{x+=p.x;y+=p.y;});
+      return {points:set.points,c:{x:x/set.points.length,y:y/set.points.length}};
+    });
+    if(!v[0]||!v[1]) return [null,null];
+    const a=Math.hypot(v[0].c.x-leftC.x,v[0].c.y-leftC.y)+Math.hypot(v[1].c.x-rightC.x,v[1].c.y-rightC.y);
+    const b=Math.hypot(v[1].c.x-leftC.x,v[1].c.y-leftC.y)+Math.hypot(v[0].c.x-rightC.x,v[0].c.y-rightC.y);
+    return a<=b?[v[0],v[1]]:[v[1],v[0]];
+  }
+
+  function buildEyePiecewiseMeshes(lm, irisLm, eyeWidthValue, eyeHeightValue, irisSizeValue){
+    const leftC=centroid(lm,IDX.leftEye), rightC=centroid(lm,IDX.rightEye);
+    const irises=matchIrisToEyes(irisLm,leftC,rightC);
+    const eyes=[
+      {ring:IDX.leftEye,upper:[161,160,159,158,157],lower:[144,145,153,154,155],inner:133,outer:33,iris:irises[0]},
+      {ring:IDX.rightEye,upper:[388,387,386,385,384],lower:[381,380,374,373,390],inner:362,outer:263,iris:irises[1]}
+    ];
+    const wNorm=Math.max(-1,Math.min(1,eyeWidthValue/40));
+    const hNorm=Math.max(-1,Math.min(1,eyeHeightValue/10));
+    const iNorm=Math.max(-1,Math.min(1,irisSizeValue/6));
+    const meshes=[];
+
+    eyes.forEach((eye,eyeNo)=>{
+      const inner=lm[eye.inner], outer=lm[eye.outer];
+      let ex={x:outer.x-inner.x,y:outer.y-inner.y};
+      const span=Math.hypot(ex.x,ex.y)||1; ex={x:ex.x/span,y:ex.y/span};
+      let ey={x:-ex.y,y:ex.x};
+      const center={x:(inner.x+outer.x)/2,y:(inner.y+outer.y)/2};
+      const upMean=eye.upper.reduce((s,i)=>{const p=lm[i];return s+((p.x-center.x)*ey.x+(p.y-center.y)*ey.y);},0)/eye.upper.length;
+      const loMean=eye.lower.reduce((s,i)=>{const p=lm[i];return s+((p.x-center.x)*ey.x+(p.y-center.y)*ey.y);},0)/eye.lower.length;
+      if(upMean>loMean) ey={x:-ey.x,y:-ey.y};
+      let minV=Infinity,maxV=-Infinity;
+      eye.ring.forEach(i=>{const p=lm[i],v=(p.x-center.x)*ey.x+(p.y-center.y)*ey.y;minV=Math.min(minV,v);maxV=Math.max(maxV,v);});
+      const halfH=Math.max(3,(maxV-minV)/2);
+
+      const src=[],dst=[],kind=[];
+      const add=(s,d,k)=>{src.push({x:s.x,y:s.y});dst.push({x:d.x,y:d.y});kind.push(k);};
+      const upperSet=new Set(eye.upper), lowerSet=new Set(eye.lower);
+      const warpPoint=(p,sx,sy,c=center)=>{
+        const px=p.x-c.x,py=p.y-c.y;
+        const u=px*ex.x+py*ex.y, v=px*ey.x+py*ey.y;
+        return {x:c.x+(u*sx)*ex.x+(v*sy)*ey.x,y:c.y+(u*sx)*ex.y+(v*sy)*ey.y};
+      };
+
+      // Photoshop-like behavior: scale the whole visible eye vertically, not just the lash line.
+      // +40 ~= ~26% taller eye region, -40 ~= ~18% shorter.
+      const heightScale = hNorm>=0 ? 1 + hNorm*0.08 : 1 + hNorm*0.06;
+      const widthScale = 1 + wNorm*0.11;
+
+      eye.ring.forEach(i=>{
+        const p=lm[i];
+        const u=(p.x-center.x)*ex.x+(p.y-center.y)*ex.y;
+        const edge=Math.min(1,Math.abs(u)/(span*0.5||1));
+        const wx=1+(widthScale-1)*(0.62+0.20*edge);
+        let hy=0.90;
+        if(upperSet.has(i)||lowerSet.has(i)) hy=1.0;
+        if(i===eye.inner||i===eye.outer) hy=0.48;
+        const sy=1+(heightScale-1)*hy;
+        add(p,warpPoint(p,wx,sy),'lid');
+      });
+
+      // Dense inner eye support so the sclera/eyelid contact band scales with the eye.
+      eye.ring.forEach(i=>{
+        const p=lm[i];
+        [0.78,0.58].forEach((f,fi)=>{
+          const s={x:center.x+(p.x-center.x)*f,y:center.y+(p.y-center.y)*f};
+          const sx=1+(widthScale-1)*(fi===0?0.42:0.24);
+          const sy=1+(heightScale-1)*(fi===0?0.86:0.68);
+          add(s,warpPoint(s,sx,sy),'support');
+        });
+      });
+
+      let irisMeta=null;
+      if(eye.iris?.points?.length){
+        const ic=centroid(eye.iris.points, eye.iris.points.map((_,idx)=>idx));
+        let irisRx=0,irisRy=0;
+        eye.iris.points.forEach(p=>{
+          const dx=p.x-ic.x,dy=p.y-ic.y;
+          const u=dx*ex.x+dy*ex.y,v=dx*ey.x+dy*ey.y;
+          irisRx=Math.max(irisRx,Math.abs(u)); irisRy=Math.max(irisRy,Math.abs(v));
+        });
+        irisRx=Math.max(irisRx,span*.055); irisRy=Math.max(irisRy,halfH*.34);
+
+        // Eye-height now deliberately scales the iris too. Separate iris slider adds/subtracts from it.
+        const coupled = hNorm>=0 ? hNorm*0.04 : hNorm*0.03;
+        const irisScale=Math.max(0.94,Math.min(1.10,1 + coupled + iNorm*0.05));
+        eye.iris.points.forEach(p=>{
+          const d={x:ic.x+(p.x-ic.x)*irisScale,y:ic.y+(p.y-ic.y)*irisScale};
+          add(p,d,'iris');
+        });
+
+        // Sclera support follows vertical eye scale but less than the eyelid.
+        const scleraN=12;
+        for(let k=0;k<scleraN;k++){
+          const a=2*Math.PI*k/scleraN;
+          const s={x:ic.x+Math.cos(a)*irisRx*1.90,y:ic.y+Math.sin(a)*irisRy*1.68};
+          const d=warpPoint(s,1+(widthScale-1)*0.16,1+(heightScale-1)*0.58,ic);
+          add(s,d,'sclera');
+        }
+        irisMeta={center:{x:ic.x,y:ic.y},rx:irisRx,ry:irisRy,scale:irisScale};
+      }
+
+      // Fixed outer boundary so brow/cheek/hair remain stable.
+      const rx=span*.86,ry=Math.max(halfH*3.0,span*.38);
+      const boundaryN=30;
+      for(let k=0;k<boundaryN;k++){
+        const a=2*Math.PI*k/boundaryN,u=Math.cos(a)*rx,v=Math.sin(a)*ry;
+        const p={x:center.x+u*ex.x+v*ey.x,y:center.y+u*ex.y+v*ey.y};
+        add(p,p,'boundary');
+      }
+      const tris=delaunayTriangulate(src);
+      meshes.push({src,dst,tris,kind,eyeNo,irisMeta});
+    });
+    return meshes;
+  }
+
+  function renderEyePiecewise(targetCtx,sourceCanvas,meshes){
+    if(!meshes?.length) return;
+    meshes.forEach(mesh=>mesh.tris.forEach(t=>{
+      const s0=mesh.src[t[0]],s1=mesh.src[t[1]],s2=mesh.src[t[2]],d0=mesh.dst[t[0]],d1=mesh.dst[t[1]],d2=mesh.dst[t[2]];
+      const areaS=(s1.x-s0.x)*(s2.y-s0.y)-(s1.y-s0.y)*(s2.x-s0.x);
+      const areaD=(d1.x-d0.x)*(d2.y-d0.y)-(d1.y-d0.y)*(d2.x-d0.x);
+      if(Math.abs(areaS)<1e-4||Math.abs(areaD)<1e-4||areaS*areaD<=0)return;
+      drawTriangle(targetCtx,sourceCanvas,sourceCanvas.width,sourceCanvas.height,s0,s1,s2,d0,d1,d2);
+    }));
+
+    // Restore/scale the original iris texture as a circular patch.
+    // This keeps the successful iris preservation from earlier versions while allowing Photoshop-like eye-height scaling.
+    meshes.forEach(mesh=>{
+      const meta=mesh.irisMeta;
+      if(!meta) return;
+      const cx=meta.center.x, cy=meta.center.y, scale=meta.scale||1;
+      const srcRx=Math.max(meta.rx*1.08,5.2), srcRy=Math.max(meta.ry*1.06,4.8);
+      const boxX=Math.max(0,Math.floor(cx-srcRx-4)), boxY=Math.max(0,Math.floor(cy-srcRy-4));
+      const boxW=Math.min(sourceCanvas.width-boxX,Math.ceil(srcRx*2+8));
+      const boxH=Math.min(sourceCanvas.height-boxY,Math.ceil(srcRy*2+8));
+      if(boxW<=1||boxH<=1)return;
+      const patch=document.createElement('canvas'); patch.width=boxW;patch.height=boxH;
+      const pctx=patch.getContext('2d');
+      pctx.drawImage(sourceCanvas,boxX,boxY,boxW,boxH,0,0,boxW,boxH);
+      pctx.globalCompositeOperation='destination-in';
+      const mx=cx-boxX,my=cy-boxY;
+      const grad=pctx.createRadialGradient(mx,my,Math.min(srcRx,srcRy)*.28,mx,my,Math.max(srcRx,srcRy));
+      grad.addColorStop(0,'rgba(255,255,255,1)');
+      grad.addColorStop(.50,'rgba(255,255,255,.92)');
+      grad.addColorStop(.72,'rgba(255,255,255,.30)');
+      grad.addColorStop(1,'rgba(255,255,255,0)');
+      pctx.fillStyle=grad;pctx.beginPath();pctx.ellipse(mx,my,srcRx,srcRy,0,0,Math.PI*2);pctx.fill();
+      pctx.globalCompositeOperation='source-over';
+
+      const dw=boxW*scale, dh=boxH*scale;
+      targetCtx.save();
+      targetCtx.globalAlpha=.88;
+      targetCtx.imageSmoothingEnabled=true;
+      targetCtx.imageSmoothingQuality='high';
+      // Clip the restored iris to the actual warped eye opening so hidden iris pixels never bleed over the lids.
+      const lidPts=[];
+      mesh.dst.forEach((p,i)=>{ if(mesh.kind[i]==='lid') lidPts.push(p); });
+      if(lidPts.length>=3){
+        targetCtx.beginPath();
+        targetCtx.moveTo(lidPts[0].x,lidPts[0].y);
+        for(let i=1;i<lidPts.length;i++) targetCtx.lineTo(lidPts[i].x,lidPts[i].y);
+        targetCtx.closePath();
+        targetCtx.clip();
+      }
+      targetCtx.drawImage(patch,cx-dw/2,cy-dh/2,dw,dh);
+      targetCtx.restore();
+    });
+  }
+
+  // Draw one warped source-triangle -> destination-triangle using canvas affine transform
+  function drawTriangle(targetCtx, srcImg, srcW, srcH, s0,s1,s2, d0,d1,d2){
+    // 소스와 목적 삼각형을 함께 0.65px 확장한다. 목적지만 겹치면 강한 변형에서 격자 이음선이 생긴다.
+    const expandTri=(p0,p1,p2,pad)=>{
+      const cx=(p0.x+p1.x+p2.x)/3,cy=(p0.y+p1.y+p2.y)/3;
+      const ex=p=>{const vx=p.x-cx,vy=p.y-cy,len=Math.hypot(vx,vy)||1,k=(len+pad)/len;return{x:cx+vx*k,y:cy+vy*k};};
+      return [ex(p0),ex(p1),ex(p2)];
+    };
+    const [es0,es1,es2]=expandTri(s0,s1,s2,.65);
+    const [ed0,ed1,ed2]=expandTri(d0,d1,d2,.65);
+
+    targetCtx.save();
+    targetCtx.beginPath();
+    targetCtx.moveTo(ed0.x,ed0.y);
+    targetCtx.lineTo(ed1.x,ed1.y);
+    targetCtx.lineTo(ed2.x,ed2.y);
+    targetCtx.closePath();
+    targetCtx.clip();
+
+    // solve affine matrix mapping src triangle -> dst triangle
+    const denom = (es1.x-es0.x)*(es2.y-es0.y) - (es2.x-es0.x)*(es1.y-es0.y);
+    if(Math.abs(denom) < 1e-8){ targetCtx.restore(); return; }
+
+    const a=((ed1.x-ed0.x)*(es2.y-es0.y)-(ed2.x-ed0.x)*(es1.y-es0.y))/denom;
+    const b=((ed1.y-ed0.y)*(es2.y-es0.y)-(ed2.y-ed0.y)*(es1.y-es0.y))/denom;
+    const c=((ed2.x-ed0.x)*(es1.x-es0.x)-(ed1.x-ed0.x)*(es2.x-es0.x))/denom;
+    const d=((ed2.y-ed0.y)*(es1.x-es0.x)-(ed1.y-ed0.y)*(es2.x-es0.x))/denom;
+    const e=ed0.x-a*es0.x-c*es0.y;
+    const f=ed0.y-b*es0.x-d*es0.y;
+
+    targetCtx.transform(a,b,c,d,e,f);
+    targetCtx.drawImage(srcImg, 0, 0, srcW, srcH);
+    targetCtx.restore();
+  }
+
+  const REF_WIDTH = 720; // 슬라이더 상수(6px, 8px, 10px 등)들의 기준 해상도
+
+  // 핵심 워프 렌더링 — targetCtx/targetCanvas에 그림. overlay=true면 화면 표시용(메시/포인트 오버레이 포함),
+  // overlay=false면 저장용(오버레이 없이 순수 이미지만, 어떤 해상도든 재사용 가능)
+
+  function groupsForSlider(id){
+    switch(id){
+      case 'eyeWidth': return ['eyeWidth0','eyeWidth1'];
+      case 'eyeHeight': return ['eyeHeight0','eyeHeight1'];
+      case 'irisSize': return [];
+      case 'eyeDist': return ['eyeDistL','eyeDistR'];
+      case 'eyeTilt': return ['eyeTilt0','eyeTilt1'];
+      case 'browDist': return ['browDist0','browDist1'];
+      case 'browTilt': return ['browTilt0','browTilt1'];
+      case 'noseWidth': return ['noseWidthL','noseWidthR'];
+      case 'noseLength': return ['noseLenBridge','noseLenMid','noseLenTip','noseLenBase'];
+      case 'nostrilWidth': return ['nostrilL','nostrilR'];
+      case 'noseShape': return ['noseShapeL','noseShapeR'];
+      case 'mouthWidth': return ['mouthWidthL','mouthWidthR'];
+      case 'upperLip': return ['upperLipOuter','upperLipInner'];
+      case 'lowerLip': return ['lowerLipOuter','lowerLipInner'];
+      case 'philtrum': return ['philtrum'];
+      case 'smile': return ['mouthCornerL','mouthCornerR'];
+      case 'faceHeight': return ['faceHeight'];
+      case 'chinWidth': return ['chinWidthCore','chinWidthSoft'];
+      case 'jawline': return ['jawline'];
+      case 'faceWidth': return ['faceWidth'];
+      case 'chin': return ['chin'];
+      default: return [id];
+    }
+  }
+  function influencePointsForSlider(controls, sliderId){
+    if(!sliderId) return [];
+    const groups = new Set(groupsForSlider(sliderId));
+    const pts = controls.filter(c=> groups.has(c.group) && (Math.abs(c.dx)+Math.abs(c.dy) > 0.001));
+    let maxMag = 0;
+    pts.forEach(c=>{ c.__mag = Math.hypot(c.dx||0,c.dy||0); if(c.__mag>maxMag) maxMag=c.__mag; });
+    maxMag = Math.max(maxMag, 1e-4);
+    pts.forEach(c=>{ c.__w = Math.max(0.12, Math.min(1, c.__mag / maxMag)); });
+    return pts;
+  }
+  function drawInfluencePreview(){ /* deprecated in v1.7.8: color-code points instead of painting area overlays */ }
+
+  function collectEyeDebugPoints(lm, irisSets){
+    if(!lm) return [];
+    const points=[];
+    const pushIdx=(idxs, type)=> idxs.forEach(idx=>{ if(lm[idx]) points.push({x:lm[idx].x, y:lm[idx].y, type}); });
+    pushIdx(IDX.leftEye, 'eye'); pushIdx(IDX.rightEye, 'eye');
+    pushIdx(IDX.leftBrow, 'brow'); pushIdx(IDX.rightBrow, 'brow');
+    pushIdx([168,6,197,195,5,4,1,2,98,327], 'nose');
+    (irisSets||[]).forEach(set=> (set.points||[]).forEach(p=> points.push({x:p.x, y:p.y, type:'iris'})));
+    return points;
+  }
+  function drawPoint(targetCtx, x, y, color, alpha, r){
+    targetCtx.fillStyle = color.replace('__A__', String(Math.max(0, Math.min(1, alpha))));
+    targetCtx.beginPath(); targetCtx.arc(x,y,r,0,Math.PI*2); targetCtx.fill();
+  }
+  function colorForDebugType(type){
+    if(type==='iris') return 'rgba(68, 213, 255, __A__)';
+    if(type==='eye') return 'rgba(255, 161, 68, __A__)';
+    if(type==='aperture') return 'rgba(255, 210, 110, __A__)';
+    if(type==='brow') return 'rgba(201, 120, 255, __A__)';
+    if(type==='nose') return 'rgba(255, 244, 180, __A__)';
+    return 'rgba(210, 190, 160, __A__)';
+  }
+
+  function renderTo(targetCtx, targetCanvas, overlay, gridN){
+    targetCtx.clearRect(0,0,targetCanvas.width,targetCanvas.height);
+    if(!landmarks){ targetCtx.drawImage(img,0,0,targetCanvas.width,targetCanvas.height); return; }
+
+    const scale=targetCanvas.width/REF_WIDTH;
+    const lmScale=targetCanvas.width/img.width;
+    const lm=landmarks.map(p=>({x:p.x*lmScale,y:p.y*lmScale}));
+    const irisLm=irisLandmarks.map(set=>({points:set.points.map(p=>({x:p.x*lmScale,y:p.y*lmScale}))}));
+
+    // Keep every existing non-eye slider on the original RBF engine.
+    // Eye width/height are removed from RBF and applied later with a local piecewise mesh.
+    const ew=state.eyeWidth,eh=state.eyeHeight,is=state.irisSize;
+    state.eyeWidth=0;state.eyeHeight=0;
+    const controls=buildControlPoints(lm,scale,irisLm);
+    state.eyeWidth=ew;state.eyeHeight=eh;
+
+    const sigma=targetCanvas.width*.085,geom=computeFaceGeom(lm);
+    const cols=gridN||GRID_COLS,rows=gridN||GRID_ROWS;
+    const srcGrid=[],dstGrid=[];
+    for(let r=0;r<=rows;r++){
+      const sr=[],dr=[];
+      for(let c=0;c<=cols;c++){
+        const x=c/cols*targetCanvas.width,y=r/rows*targetCanvas.height;
+        sr.push({x,y});
+        const raw=rbfDisplacement(x,y,controls,sigma),m=faceMask(x,y,geom);
+        dr.push({x:x+raw.dx*m+raw.manualDx,y:y+raw.dy*m+raw.manualDy});
+      }
+      srcGrid.push(sr);dstGrid.push(dr);
+    }
+
+    const baseCanvas=document.createElement('canvas');
+    baseCanvas.width=targetCanvas.width;baseCanvas.height=targetCanvas.height;
+    const baseCtx=baseCanvas.getContext('2d');
+    baseCtx.drawImage(img,0,0,targetCanvas.width,targetCanvas.height);
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const s00=srcGrid[r][c],s10=srcGrid[r][c+1],s01=srcGrid[r+1][c],s11=srcGrid[r+1][c+1];
+      const d00=dstGrid[r][c],d10=dstGrid[r][c+1],d01=dstGrid[r+1][c],d11=dstGrid[r+1][c+1];
+      drawTriangle(baseCtx,img,targetCanvas.width,targetCanvas.height,s00,s10,s01,d00,d10,d01);
+      drawTriangle(baseCtx,img,targetCanvas.width,targetCanvas.height,s10,s11,s01,d10,d11,d01);
+    }
+
+    const mapGlobal=p=>{const raw=rbfDisplacement(p.x,p.y,controls,sigma),m=faceMask(p.x,p.y,geom);return{x:p.x+raw.dx*m+raw.manualDx,y:p.y+raw.dy*m+raw.manualDy};};
+    const baseLm=lm.map(mapGlobal);
+    const baseIris=irisLm.map(set=>({points:set.points.map(mapGlobal)}));
+    const eyeMeshes=buildEyePiecewiseMeshes(baseLm,baseIris,ew,eh,is);
+    eyeMeshDebug=eyeMeshes;
+
+    targetCtx.drawImage(baseCanvas,0,0);
+    if(ew!==0||eh!==0||is!==0) renderEyePiecewise(targetCtx,baseCanvas,eyeMeshes);
+    if(!overlay)return;
+
+    if(showMesh){
+      targetCtx.strokeStyle='rgba(201,138,62,0.35)';targetCtx.lineWidth=1;
+      for(let r=0;r<=rows;r++){targetCtx.beginPath();for(let c=0;c<=cols;c++){const p=dstGrid[r][c];c===0?targetCtx.moveTo(p.x,p.y):targetCtx.lineTo(p.x,p.y);}targetCtx.stroke();}
+      for(let c=0;c<=cols;c++){targetCtx.beginPath();for(let r=0;r<=rows;r++){const p=dstGrid[r][c];r===0?targetCtx.moveTo(p.x,p.y):targetCtx.lineTo(p.x,p.y);}targetCtx.stroke();}
+      if(ew!==0||eh!==0||is!==0){targetCtx.strokeStyle='rgba(127,215,255,.55)';eyeMeshes.forEach(mesh=>mesh.tris.forEach(t=>{const a=mesh.dst[t[0]],b=mesh.dst[t[1]],c=mesh.dst[t[2]];targetCtx.beginPath();targetCtx.moveTo(a.x,a.y);targetCtx.lineTo(b.x,b.y);targetCtx.lineTo(c.x,c.y);targetCtx.closePath();targetCtx.stroke();}));}
+    }
+    const matchedControls = influencePointsForSlider(controls, activeVizSlider);
+    if(showPoints){
+      const rawLm = rawLandmarks ? rawLandmarks.map(p=>({x:p.x*lmScale,y:p.y*lmScale})) : null;
+      const rawIris = rawIrisLandmarks.map(set=>({points:set.points.map(p=>({x:p.x*lmScale,y:p.y*lmScale}))}));
+      const refinedDebug = collectEyeDebugPoints(lm, irisLm);
+      const rawDebug = collectEyeDebugPoints(rawLm, rawIris);
+
+      if(showRawDetect){
+        rawDebug.forEach(p=> drawPoint(targetCtx, p.x, p.y, colorForDebugType(p.type), pointOpacity*0.38, p.type==='iris'?2.2:1.9));
+      }
+      if(showRefinedDetect){
+        refinedDebug.forEach(p=>{
+          const alpha = p.type==='iris' ? pointOpacity*0.78 : pointOpacity*0.62;
+          const radius = p.type==='iris' ? 2.4 : (p.type==='eye'?2.15:1.9);
+          drawPoint(targetCtx, p.x, p.y, p.type==='iris' ? 'rgba(72, 244, 255, __A__)' : p.type==='eye' ? 'rgba(255, 236, 162, __A__)' : p.type==='brow' ? 'rgba(212, 176, 255, __A__)' : 'rgba(255, 245, 204, __A__)', alpha, radius);
+        });
+      }
+
+      if(showWarpPoints){
+        controls.forEach(c=>{
+          const raw=rbfDisplacement(c.x,c.y,controls,sigma),m=faceMask(c.x,c.y,geom);
+          const px=c.x+raw.dx*m+raw.manualDx, py=c.y+raw.dy*m+raw.manualDy;
+          const matched = !!activeVizSlider && matchedControls.includes(c);
+          const weight = matched ? (c.__w || 0.5) : 0;
+          const alpha = !showInfluence || !activeVizSlider ? pointOpacity*0.62 : (matched ? pointOpacity*(0.42 + weight*0.56) : pointOpacity*0.14);
+          const radius = matched ? (2.0 + weight*1.8) : 1.75;
+          const color = !showInfluence || !activeVizSlider ? 'rgba(201,138,62,__A__)' : (matched ? 'rgba(255,196,92,__A__)' : 'rgba(132,122,110,__A__)');
+          drawPoint(targetCtx, px, py, color, alpha, radius);
+        });
+        if(ew!==0||eh!==0)eyeMeshes.forEach(mesh=>mesh.dst.forEach((p,i)=>{
+          const k=mesh.kind[i];
+          const activeEye = activeVizSlider==='eyeWidth' || activeVizSlider==='eyeHeight' || activeVizSlider==='irisSize';
+          let alpha = pointOpacity*0.28, radius = 1.8, color='rgba(160, 190, 168, __A__)';
+          if(k==='lid'){ alpha = activeEye && showInfluence ? pointOpacity*0.95 : pointOpacity*0.48; radius = activeEye ? 2.45 : 2.0; color='rgba(228,255,127,__A__)'; }
+          else if(k==='support'){ alpha = activeEye && showInfluence ? pointOpacity*0.72 : pointOpacity*0.40; radius = 2.0; color='rgba(141,255,191,__A__)'; }
+          else if(k==='aperture'){ alpha = activeEye && showInfluence ? pointOpacity*0.82 : pointOpacity*0.44; radius = 2.15; color='rgba(255,210,110,__A__)'; }
+          else if(k==='sclera'){ alpha = activeEye && showInfluence ? pointOpacity*0.58 : pointOpacity*0.26; radius = 1.8; color='rgba(159,232,255,__A__)'; }
+          else if(k==='iris'){ alpha = activeEye && showInfluence ? pointOpacity*0.44 : pointOpacity*0.22; radius = 1.65; color='rgba(127,215,255,__A__)'; }
+          else if(k==='boundary'){ alpha = activeEye && showInfluence ? pointOpacity*0.22 : pointOpacity*0.12; radius = 1.45; color='rgba(255,255,255,__A__)'; }
+          drawPoint(targetCtx, p.x, p.y, color, alpha, radius);
+        }));
+      }
+    }
+    if(pointer.inside&&img){targetCtx.save();targetCtx.strokeStyle='rgba(236,230,224,.9)';targetCtx.lineWidth=1.2;targetCtx.beginPath();targetCtx.arc(pointer.x,pointer.y,brushSize/2,0,Math.PI*2);targetCtx.stroke();targetCtx.fillStyle='rgba(236,230,224,.9)';targetCtx.beginPath();targetCtx.arc(pointer.x,pointer.y,2,0,Math.PI*2);targetCtx.fill();targetCtx.restore();}
+  }
+
+  function render(){
+    if(!img) return;
+    if(showOriginal){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);return;}
+    renderTo(ctx, canvas, true);
+  }
+
+  // 원본 해상도로 다시 렌더링해서 내보내기 (오버레이 없이)
+  function renderFullResExportCanvas(){
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = img.width;
+    exportCanvas.height = img.height;
+    const exportCtx = exportCanvas.getContext('2d');
+    renderTo(exportCtx, exportCanvas, false, 96); // 고해상도 저장용 고밀도 메시
+    return exportCanvas;
+  }
+
+})();
+</script>
+</body>
+</html>
